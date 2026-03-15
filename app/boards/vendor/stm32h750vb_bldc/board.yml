@@ -1,0 +1,6 @@
+board:
+  name: stm32h750vb_bldc
+  full_name: STM32H750VB BLDC
+  vendor: vcc-gnd
+  socs:
+    - name: stm32h750xx

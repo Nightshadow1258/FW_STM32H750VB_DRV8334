@@ -1,0 +1,167 @@
+/*
+ * Copyright (c) 2026 Paul Reisch
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+/dts-v1/;
+#include <st/h7/stm32h750Xb.dtsi>
+#include <st/h7/stm32h750vbtx-pinctrl.dtsi>
+#include <zephyr/dt-bindings/input/input-event-codes.h>
+#include "stm32h750vb_bldc.dtsi"
+
+
+/ {
+	model = "VCC-GND Studio STM32H750VB";
+	compatible = "st,stm32h750vb";
+
+	aliases {
+		spi-flash0 = &w25q128jv;
+	};
+
+	chosen {
+		zephyr,console = &usart1;
+		zephyr,shell-uart = &usart1;
+		zephyr,sram = &sram0;
+		zephyr,flash = &flash0;
+		zephyr,flash-controller = &w25q128jv;
+	};
+
+	leds {
+		compatible = "gpio-leds";
+		as5047p_cs: as5047p_cs {
+			gpios = <&gpioa 4 GPIO_ACTIVE_LOW>;
+			label = "AS5047P_CS";
+		};
+	};
+	/* Define the Index Pin as a GPIO for Interrupt use */
+	encoder_index: encoder_index {
+		compatible = "gpio-keys";
+		index_pin: index_pin {
+			gpios = <&gpioa 8 (GPIO_ACTIVE_HIGH | GPIO_PULL_DOWN)>;
+			label = "Encoder Index";
+		};
+	};
+
+};
+
+&clk_hse {
+	clock-frequency = <DT_FREQ_M(16)>;
+	status = "okay";
+};
+
+&clk_lse {
+	status = "okay";
+};
+
+&pll {
+	div-m = <1>;
+	mul-n = <60>;
+	div-p = <2>;
+	div-q = <15>;
+	div-r = <6>;
+	clocks = <&clk_hse>;
+	status = "okay";
+};
+
+&rcc {
+	clocks = <&pll>;
+	clock-frequency = <DT_FREQ_M(480)>;
+	d1cpre = <1>;
+	hpre = <2>;
+	d1ppre = <2>;
+	d2ppre1 = <2>;
+	d2ppre2 = <2>;
+	d3ppre = <2>;
+};
+
+&pwr {
+	power-supply = "ldo";
+};
+
+&usart1 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&usart1_tx_pa9 &usart1_rx_pa10>;
+	current-speed = <115200>;
+	status = "okay";
+};
+
+&pinctrl {
+	spi3_sck_pc10: spi3_sck_pc10 {
+		pinmux = <STM32_PINMUX('C', 10, AF6)>;
+		bias-pull-down;
+	};
+	spi3_miso_pc11: spi3_miso_pc11 {
+		pinmux = <STM32_PINMUX('C', 11, AF6)>;
+		bias-pull-up;
+	};
+	spi3_mosi_pc12: spi3_mosi_pc12 {
+		pinmux = <STM32_PINMUX('C', 12, AF6)>;
+		bias-pull-down;
+	};
+};
+
+&spi3 {
+	status = "okay";
+	pinctrl-0 = <&spi3_sck_pc10 &spi3_miso_pc11 &spi3_mosi_pc12>;
+	pinctrl-names = "default";
+	// cs-gpios = <&gpioa 4 GPIO_ACTIVE_LOW>; CS was not toggled
+	// keep this for later testing if i want to make a driver package for the this sensor else delete it at the end.
+	// as5047p@0 {
+		//     status = "okay";
+		//     compatible = "ams,as5047p";
+		//     reg = <0>;
+		//     spi-max-frequency = <10000000>;
+	// };
+};
+
+//&sdmmc1 {
+//	pinctrl-names = "default";
+//	pinctrl-0 = <&sdmmc1_d0_pc8 &sdmmc1_d1_pc9
+//		     &sdmmc1_d2_pc10 &sdmmc1_d3_pc11
+//		     &sdmmc1_ck_pc12 &sdmmc1_cmd_pd2>;
+//	cd-gpios = <&gpioa 8 GPIO_ACTIVE_LOW>;
+//	disk-name = "SD";
+//	status = "okay";
+//};
+
+&quadspi {
+	pinctrl-names = "default";
+	pinctrl-0 = <&quadspi_clk_pb2 &quadspi_bk1_ncs_pb10
+		     &quadspi_bk1_io0_pd11 &quadspi_bk1_io1_pd12
+		     &quadspi_bk1_io2_pe2 &quadspi_bk1_io3_pd13>;
+	status = "okay";
+
+	w25q128jv: qspi-nor-flash@0 {
+		compatible = "st,stm32-qspi-nor";
+		reg = <0>;
+		size = <DT_SIZE_M(128)>; /* 128 Mbits */
+		qspi-max-frequency = <80000000>;
+		cs-high-time = <4>; /* >= 50 ns */
+		spi-bus-width = <4>;
+		status = "okay";
+
+		partitions {
+			compatible = "fixed-partitions";
+			#address-cells = <1>;
+			#size-cells = <1>;
+
+			storage_partition: partition@0 {
+				label = "storage";
+				reg = <0x0 DT_SIZE_M(16)>;
+			};
+		};
+	};
+};
+
+
+&timers4 {
+	status = "okay";
+	qdec: qdec {
+		status = "okay";
+		pinctrl-0 = <&tim4_ch1_pb6 &tim4_ch2_pb7>;
+		pinctrl-names = "default";
+		st,counts-per-revolution = <4000>;
+		st,input-filter-level = <2>; // default is 0
+	};
+};

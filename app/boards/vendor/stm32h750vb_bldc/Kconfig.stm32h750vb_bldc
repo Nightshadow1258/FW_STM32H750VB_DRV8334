@@ -1,0 +1,13 @@
+if BOARD_STM32H750VB_BLDC
+
+config BOARD
+    default "stm32h750vb_bldc"
+
+# This ensures the H7 series clock and GPIO drivers are used
+config SOC_SERIES_STM32H7X
+    default y
+
+config SOC_STM32H750XX
+    default y
+
+endif # BOARD_STM32H750VB_BLDC

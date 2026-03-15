@@ -23,8 +23,8 @@
 
 LOG_MODULE_REGISTER(app, LOG_LEVEL_INF);
 
-#define SPI1_NODE DT_NODELABEL(spi1)
-static const struct device *spi1_dev = DEVICE_DT_GET(SPI1_NODE);
+#define SPI3_NODE DT_NODELABEL(spi3)
+static const struct device *spi3_dev = DEVICE_DT_GET(SPI3_NODE);
 
 static const struct gpio_dt_spec cs_gpio = GPIO_DT_SPEC_GET(DT_NODELABEL(as5047p_cs), gpios);
 
@@ -81,11 +81,6 @@ void read_encoder(void)
 #include <zephyr/kernel.h>
 #include <zephyr/drivers/sensor.h>
 #include <zephyr/drivers/spi.h>
-
-//
-// Trigger pin for starting the measurement
-static const struct gpio_dt_spec trigger_gpio =
-    GPIO_DT_SPEC_GET(DT_NODELABEL(meas_trigger), gpios);
 
 static struct gpio_callback trigger_cb_data;
 static K_SEM_DEFINE(meas_sem, 0, 1);
@@ -183,7 +178,7 @@ void measurement_thread_entry(void *p1, void *p2, void *p3)
             }
 
             /* 2. Fetch SPI Raw Angle */
-            uint16_t raw_reg = as5047p_read_reg(spi1_dev, &spi_cfg, &cs_gpio, AS5047P_REG_ANGLECOM);
+            uint16_t raw_reg = as5047p_read_reg(spi3_dev, &spi_cfg, &cs_gpio, AS5047P_REG_ANGLECOM);
 
             /* 3. Store to RAM using the loop index 'i' */
             sample_buffer[i].timestamp = k_cycle_get_32();
@@ -206,65 +201,6 @@ void measurement_thread_entry(void *p1, void *p2, void *p3)
 K_THREAD_DEFINE(meas_thread_id, 2048, measurement_thread_entry, NULL, NULL, NULL, 2, 0, 0);
 /////
 
-// PWM LED Section
-#define PWM_THREAD_STACK_SIZE 512
-#define PWM_THREAD_PRIORITY 10 // Positive number = lower priority than main (0)
-#define MIN_PERIOD PWM_SEC(1U) / 128U
-#define MAX_PERIOD PWM_SEC(1U)
-
-static const struct pwm_dt_spec pwm_led0 = PWM_DT_SPEC_GET(DT_ALIAS(pwm_led0));
-
-void pwm_led_thread_entry(void *p1, void *p2, void *p3)
-{
-    uint32_t max_period = MAX_PERIOD;
-    uint32_t period;
-    uint8_t dir = 0U;
-
-    if (!pwm_is_ready_dt(&pwm_led0))
-    {
-        return;
-    }
-
-    /* Calibration logic moved to thread */
-    while (pwm_set_dt(&pwm_led0, max_period, max_period / 2U))
-    {
-        max_period /= 2U;
-        if (max_period < (4U * MIN_PERIOD))
-        {
-            return;
-        }
-    }
-
-    period = max_period;
-
-    while (1)
-    {
-        /* Set PWM duty cycle */
-        pwm_set_dt(&pwm_led0, period, period / 2U);
-
-        /* Update period for next iteration */
-        period = dir ? (period * 2U) : (period / 2U);
-
-        if (period > max_period)
-        {
-            period = max_period / 2U;
-            dir = 0U;
-        }
-        else if (period < MIN_PERIOD)
-        {
-            period = MIN_PERIOD * 2U;
-            dir = 1U;
-        }
-
-        /* Thread sleeps, yielding to high-prio sensor tasks */
-        k_sleep(K_SECONDS(4));
-    }
-}
-/* Define the low-priority thread */
-K_THREAD_DEFINE(pwm_led_tid, PWM_THREAD_STACK_SIZE,
-                pwm_led_thread_entry, NULL, NULL, NULL,
-                PWM_THREAD_PRIORITY, 0, 0);
-
 int main(void)
 {
     if (!gpio_is_ready_dt(&cs_gpio))
@@ -275,11 +211,11 @@ int main(void)
     /* Configure as output and set to High (Inactive) */
     gpio_pin_configure_dt(&cs_gpio, GPIO_OUTPUT_INACTIVE);
 
-    if (!device_is_ready(spi1_dev))
+    if (!device_is_ready(spi3_dev))
     {
         return -ENODEV;
     }
-    if (!device_is_ready(spi1_dev))
+    if (!device_is_ready(spi3_dev))
     {
         return -ENODEV;
     }
@@ -290,22 +226,12 @@ int main(void)
     setup_encoder();
 
     // Check register settings
-    as5047p_dump_registers(spi1_dev, &spi_cfg, &cs_gpio);
-    as5047p_set_abi_4096(spi1_dev, &spi_cfg, &cs_gpio);
-    as5047p_dump_registers(spi1_dev, &spi_cfg, &cs_gpio);
+    as5047p_dump_registers(spi3_dev, &spi_cfg, &cs_gpio);
+    as5047p_set_abi_4096(spi3_dev, &spi_cfg, &cs_gpio);
+    as5047p_dump_registers(spi3_dev, &spi_cfg, &cs_gpio);
     k_msleep(100);
 
-    // Interrupt setup for measurement trigger
-    gpio_pin_configure_dt(&trigger_gpio, GPIO_INPUT);
-
-    /* Configure interrupt for Rising Edge (Low to High) */
-    gpio_pin_interrupt_configure_dt(&trigger_gpio, GPIO_INT_EDGE_TO_ACTIVE);
-
-    /* Attach the callback */
-    gpio_init_callback(&trigger_cb_data, trigger_handler, BIT(trigger_gpio.pin));
-    gpio_add_callback(trigger_gpio.port, &trigger_cb_data);
-
-    printk("System Ready. Trigger enabled.\n");
+     printk("System Ready!\n");
 
     while (1)
     {
@@ -318,6 +244,5 @@ int main(void)
         k_msleep(2000);
     }
 
-    return 0;
     return 0;
 }

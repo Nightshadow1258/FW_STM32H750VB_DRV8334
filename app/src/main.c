@@ -103,7 +103,7 @@ void trigger_handler(const struct device *port, struct gpio_callback *cb, uint32
 struct sensor_test_sample
 {
     uint32_t timestamp;
-    int32_t abi_ticks;
+    float abi_ticks;
     uint16_t spi_raw;
 };
 
@@ -114,7 +114,7 @@ static struct sensor_test_sample sample_buffer[MAX_SAMPLES];
 void dump_characterization_data(void)
 {
     // Crucial: Wait for the measurement thread to be 100% idle
-    k_msleep(100);
+    k_msleep(50);
 
     // Get the hardware clock frequency
     uint32_t hw_freq = sys_clock_hw_cycles_per_sec();
@@ -135,7 +135,7 @@ void dump_characterization_data(void)
         uint32_t rel_ms_int = (uint32_t)(rel_ms_float + 0.5f);
 
         // Print and then wait for the UART to clear
-        printk("%u,%u,%d,%f\n",
+        printk("%u,%u,%.4f,%.4f\n",
                i,
                rel_ms_int,
                sample_buffer[i].abi_ticks,
@@ -143,7 +143,7 @@ void dump_characterization_data(void)
 
         // Slow down the dump significantly to ensure no data loss
         // 5ms delay per line is safe for 115200 baud
-        k_msleep(10);
+        k_msleep(5);
     }
 }
 
@@ -172,19 +172,21 @@ void measurement_thread_entry(void *p1, void *p2, void *p3)
             k_timer_status_sync(&timer);
             /* 1. Fetch ABI Ticks */
             struct sensor_value qdec_value = {0};
+            double precise_degrees = 0.0;
             if (sensor_sample_fetch(qdec_dev) == 0)
             {
                 sensor_channel_get(qdec_dev, SENSOR_CHAN_ROTATION, &qdec_value);
+
+                // Convert to double to see the 0.08789 degree increments
+                precise_degrees = sensor_value_to_double(&qdec_value);
             }
 
             /* 2. Fetch SPI Raw Angle */
             uint16_t raw_reg = as5047p_read_reg(spi3_dev, &spi_cfg, &cs_gpio, AS5047P_REG_ANGLECOM);
-
             /* 3. Store to RAM using the loop index 'i' */
             sample_buffer[i].timestamp = k_cycle_get_32();
-            sample_buffer[i].abi_ticks = qdec_value.val1;
+            sample_buffer[i].abi_ticks = precise_degrees;
             sample_buffer[i].spi_raw = raw_reg & 0x3FFF;
-
             /* Wait for the remainder of the 10ms interval */
 
         }
@@ -194,12 +196,58 @@ void measurement_thread_entry(void *p1, void *p2, void *p3)
         printk("Capture End. Duration: %u ms\n", (end_time - start_time));
         printk("Data capture complete! Dumping data...\n");
         dump_characterization_data();
+        k_sem_reset(&meas_sem);
         /* Thread automatically loops back to k_sem_take and sleeps */
     }
 }
-
 K_THREAD_DEFINE(meas_thread_id, 2048, measurement_thread_entry, NULL, NULL, NULL, 2, 0, 0);
-/////
+
+//flash
+#include <zephyr/drivers/flash.h>
+#include <zephyr/fs/nvs.h>
+#define STORAGE_NODE DT_ALIAS(storage_flash)
+
+
+static struct nvs_fs fs;
+
+void init_storage(void) {
+    struct flash_pages_info info;
+    fs.flash_device = DEVICE_DT_GET(DT_MTD_FROM_FIXED_PARTITION(STORAGE_NODE));
+    fs.offset = DT_REG_ADDR(STORAGE_NODE);
+    
+    flash_get_page_info_by_offs(fs.flash_device, fs.offset, &info);
+    fs.sector_size = info.size;
+    fs.sector_count = 3; /* Adjust based on partition size */
+
+    nvs_mount(&fs);
+}
+
+void save_factor(uint16_t id, float factor) {
+    nvs_write(&fs, id, &factor, sizeof(factor));
+}
+
+void load_factor(uint16_t id) {
+    float factor;
+    int rc;
+
+    /* * id: The unique identifier used during nvs_write
+     * &factor: The buffer to store the retrieved data
+     * sizeof(factor): The maximum number of bytes to read
+     */
+    rc = nvs_read(&fs, id, &factor, sizeof(factor));
+
+    if (rc > 0) {
+        /* Data successfully retrieved */
+        printk("Factor ID %d: %f\n", id, (double)factor);
+    } else if (rc == 0) {
+        /* ID not found */
+        printk("ID %d not found\n", id);
+    } else {
+        /* Error occurred */
+        printk("Error reading NVS: %d\n", rc);
+    }
+}
+
 
 int main(void)
 {
@@ -215,13 +263,12 @@ int main(void)
     {
         return -ENODEV;
     }
+
     if (!device_is_ready(spi3_dev))
     {
         return -ENODEV;
     }
 
-    // Setup the encoder pins for the ABI Interface
-    setup_encoder();
     // Setup the encoder pins for the ABI Interface
     setup_encoder();
 

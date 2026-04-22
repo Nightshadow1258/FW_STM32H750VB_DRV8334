@@ -12,3 +12,5 @@ include(${ZEPHYR_BASE}/boards/common/openocd.board.cmake)
 include(${ZEPHYR_BASE}/boards/common/jlink.board.cmake)
 
 set(BOARD_FLASH_RUNNER openocd)
+
+# west flash --runner openocd --cmd-pre-init "source [find interface/stlink.cfg]" --cmd-pre-init "source [find target/stm32h7x.cfg]"

@@ -17,6 +17,7 @@
 
 	aliases {
 		spi-flash0 = &w25q128jv;
+		storage-flash = &storage_partition;
 	};
 
 	chosen {
@@ -42,6 +43,7 @@
 			label = "Encoder Index";
 		};
 	};
+
 
 };
 
@@ -139,6 +141,7 @@
 		qspi-max-frequency = <80000000>;
 		cs-high-time = <4>; /* >= 50 ns */
 		spi-bus-width = <4>;
+		jedec-id = [ef 40 18];
 		status = "okay";
 
 		partitions {
@@ -161,7 +164,7 @@
 		status = "okay";
 		pinctrl-0 = <&tim4_ch1_pb6 &tim4_ch2_pb7>;
 		pinctrl-names = "default";
-		st,counts-per-revolution = <4000>;
-		st,input-filter-level = <2>; // default is 0
+		st,counts-per-revolution = <2048>;
+		st,input-filter-level = <1>; // default is 0
 	};
 };

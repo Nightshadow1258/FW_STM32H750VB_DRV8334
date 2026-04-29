@@ -82,6 +82,10 @@ void read_encoder(void)
 #include <zephyr/drivers/sensor.h>
 #include <zephyr/drivers/spi.h>
 
+// Trigger pin for starting the measurement
+static const struct gpio_dt_spec trigger_gpio =
+    GPIO_DT_SPEC_GET(DT_NODELABEL(meas_trigger), gpios);
+
 static struct gpio_callback trigger_cb_data;
 static K_SEM_DEFINE(meas_sem, 0, 1);
 
@@ -248,6 +252,25 @@ void load_factor(uint16_t id) {
     }
 }
 
+// ADC Temp
+#include <zephyr/drivers/adc.h>
+
+#if !DT_NODE_EXISTS(DT_PATH(zephyr_user)) || \
+	!DT_NODE_HAS_PROP(DT_PATH(zephyr_user), io_channels)
+#error "No suitable devicetree overlay specified"
+#endif
+
+#define DT_SPEC_AND_COMMA(node_id, prop, idx) \
+	ADC_DT_SPEC_GET_BY_IDX(node_id, idx),
+
+/* Data of ADC io-channels specified in devicetree. */
+static const struct adc_dt_spec adc_channels[] = {
+	DT_FOREACH_PROP_ELEM(DT_PATH(zephyr_user), io_channels,
+			     DT_SPEC_AND_COMMA)
+};
+
+
+
 
 int main(void)
 {
@@ -267,7 +290,7 @@ int main(void)
     if (!device_is_ready(spi3_dev))
     {
         return -ENODEV;
-    }
+    }GPIO_PULL_DOWN
 
     // Setup the encoder pins for the ABI Interface
     setup_encoder();
@@ -275,20 +298,37 @@ int main(void)
     // Check register settings
     as5047p_dump_registers(spi3_dev, &spi_cfg, &cs_gpio);
     as5047p_set_abi_4096(spi3_dev, &spi_cfg, &cs_gpio);
+    uint16_t spi_raw = as5047p_read_reg(spi3_dev, &spi_cfg, &cs_gpio, AS5047P_REG_ANGLECOM);
+    spi_raw &= 0x3FFF; // Mask to 14 bits
+
+    // 2. Scale 14-bit (16384) to 12-bit (4096)
+    // Using 4096.0 for float precision or simple shift for speed
+    uint32_t initial_counts = spi_raw / 8;
+
+    // 3. Directly set the STM32 Timer Counter register
+    // TIM4 is used based on your devicetree &timers4
+    TIM4->CNT = initial_counts;
     as5047p_dump_registers(spi3_dev, &spi_cfg, &cs_gpio);
     k_msleep(100);
 
-     printk("System Ready!\n");
+    // Interrupt setup for measurement trigger
+    gpio_pin_configure_dt(&trigger_gpio, GPIO_INPUT);
+
+    /* Configure interrupt for Rising Edge (Low to High) */
+    gpio_pin_interrupt_configure_dt(&trigger_gpio, GPIO_INT_EDGE_TO_ACTIVE);
+
+    /* Attach the callback */
+    gpio_init_callback(&trigger_cb_data, trigger_handler, BIT(trigger_gpio.pin));
+    gpio_add_callback(trigger_gpio.port, &trigger_cb_data);
+
+    printk("System Ready. Trigger enabled.\n");
 
     while (1)
     {
         unsigned int count = k_sem_count_get(&meas_sem);
         // Avoid frequent printf during active measurements
-        if (count > 0)
-        {
-            printk("Pending measurements: %u\n", count);
-        }
         k_msleep(2000);
+
     }
 
     return 0;

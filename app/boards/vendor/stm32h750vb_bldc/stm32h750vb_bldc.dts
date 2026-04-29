@@ -18,6 +18,8 @@
 	aliases {
 		spi-flash0 = &w25q128jv;
 		storage-flash = &storage_partition;
+		meas-trigger = &meas_trigger;
+
 	};
 
 	chosen {
@@ -44,37 +46,50 @@
 		};
 	};
 
+	// ADC
+	zephyr,user {
+		/* adjust channel number according to pinmux in board.dts */
+		io-channels = <&adc1 10>;
+	};
 
-};
+	trigger_signal {
+		compatible = "gpio-keys";
+		meas_trigger: meas_trigger {
+			gpios = <&gpiod 9 (GPIO_PULL_DOWN | GPIO_ACTIVE_HIGH)>;
+			label = "Measurement Trigger";
+		};
+	};
 
-&clk_hse {
-	clock-frequency = <DT_FREQ_M(16)>;
-	status = "okay";
 };
 
 &clk_lse {
 	status = "okay";
 };
 
+&clk_hse {
+    clock-frequency = <DT_FREQ_M(16)>;
+    status = "okay";
+};
+
 &pll {
-	div-m = <1>;
-	mul-n = <60>;
-	div-p = <2>;
-	div-q = <15>;
-	div-r = <6>;
-	clocks = <&clk_hse>;
-	status = "okay";
+    div-m = <1>;
+    mul-n = <60>;
+    div-p = <2>;
+    div-q = <15>;
+    div-r = <6>;
+    clocks = <&clk_hse>;
+    status = "okay";
 };
 
 &rcc {
-	clocks = <&pll>;
-	clock-frequency = <DT_FREQ_M(480)>;
-	d1cpre = <1>;
-	hpre = <2>;
-	d1ppre = <2>;
-	d2ppre1 = <2>;
-	d2ppre2 = <2>;
-	d3ppre = <2>;
+    clocks = <&pll>;
+    clock-frequency = <DT_FREQ_M(480)>;
+    d1cpre = <1>;   /* SYSCLK / 1 = 480MHz */
+    hpre = <2>;    /* 480MHz / 2 = 240MHz (Max AHB speed) */
+    d1ppre = <2>;  /* 240MHz / 2 = 120MHz (APB3) */
+    d2ppre1 = <2>; /* 240MHz / 2 = 120MHz (APB1) */
+    d2ppre2 = <2>; /* 240MHz / 2 = 120MHz (APB2) */
+    d3ppre = <2>;  /* 240MHz / 2 = 120MHz (APB4) */
 };
 
 &pwr {
@@ -118,20 +133,20 @@
 };
 
 //&sdmmc1 {
-//	pinctrl-names = "default";
-//	pinctrl-0 = <&sdmmc1_d0_pc8 &sdmmc1_d1_pc9
-//		     &sdmmc1_d2_pc10 &sdmmc1_d3_pc11
-//		     &sdmmc1_ck_pc12 &sdmmc1_cmd_pd2>;
-//	cd-gpios = <&gpioa 8 GPIO_ACTIVE_LOW>;
-//	disk-name = "SD";
-//	status = "okay";
+	//    pinctrl-names = "default";
+	//    pinctrl-0 = <&sdmmc1_d0_pc8 &sdmmc1_d1_pc9
+	//             &sdmmc1_d2_pc10 &sdmmc1_d3_pc11
+	//             &sdmmc1_ck_pc12 &sdmmc1_cmd_pd2>;
+	//    cd-gpios = <&gpioa 8 GPIO_ACTIVE_LOW>;
+	//    disk-name = "SD";
+	//    status = "okay";
 //};
 
 &quadspi {
 	pinctrl-names = "default";
 	pinctrl-0 = <&quadspi_clk_pb2 &quadspi_bk1_ncs_pb10
-		     &quadspi_bk1_io0_pd11 &quadspi_bk1_io1_pd12
-		     &quadspi_bk1_io2_pe2 &quadspi_bk1_io3_pd13>;
+	&quadspi_bk1_io0_pd11 &quadspi_bk1_io1_pd12
+	&quadspi_bk1_io2_pe2 &quadspi_bk1_io3_pd13>;
 	status = "okay";
 
 	w25q128jv: qspi-nor-flash@0 {
@@ -141,7 +156,7 @@
 		qspi-max-frequency = <80000000>;
 		cs-high-time = <4>; /* >= 50 ns */
 		spi-bus-width = <4>;
-		jedec-id = [ef 40 18];
+		jedec-id = [ ef 40 18  ];
 		status = "okay";
 
 		partitions {
@@ -168,3 +183,20 @@
 		st,input-filter-level = <1>; // default is 0
 	};
 };
+
+&adc1 {
+	status = "okay";
+	#address-cells = <1>;
+	#size-cells = <0>;
+	st,adc-clock-source = "SYNC";
+	st,adc-prescaler = <1>;
+
+	channel@10 {
+		reg = <10>;
+		zephyr,gain = "ADC_GAIN_1";
+		zephyr,reference = "ADC_REF_INTERNAL";
+		zephyr,acquisition-time = <ADC_ACQ_TIME_DEFAULT>;
+		zephyr,resolution = <16>;
+	};
+};
+

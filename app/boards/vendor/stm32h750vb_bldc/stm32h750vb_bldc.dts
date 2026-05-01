@@ -41,7 +41,7 @@
 	encoder_index: encoder_index {
 		compatible = "gpio-keys";
 		index_pin: index_pin {
-			gpios = <&gpioa 8 (GPIO_ACTIVE_HIGH | GPIO_PULL_DOWN)>;
+			gpios = <&gpiob 4 (GPIO_ACTIVE_HIGH | GPIO_PULL_DOWN)>;
 			label = "Encoder Index";
 		};
 	};
@@ -67,29 +67,29 @@
 };
 
 &clk_hse {
-    clock-frequency = <DT_FREQ_M(16)>;
-    status = "okay";
+	clock-frequency = <DT_FREQ_M(16)>;
+	status = "okay";
 };
 
 &pll {
-    div-m = <1>;
-    mul-n = <60>;
-    div-p = <2>;
-    div-q = <15>;
-    div-r = <6>;
-    clocks = <&clk_hse>;
-    status = "okay";
+	div-m = <1>;
+	mul-n = <60>;
+	div-p = <2>;
+	div-q = <15>;
+	div-r = <6>;
+	clocks = <&clk_hse>;
+	status = "okay";
 };
 
 &rcc {
-    clocks = <&pll>;
-    clock-frequency = <DT_FREQ_M(480)>;
-    d1cpre = <1>;   /* SYSCLK / 1 = 480MHz */
-    hpre = <2>;    /* 480MHz / 2 = 240MHz (Max AHB speed) */
-    d1ppre = <2>;  /* 240MHz / 2 = 120MHz (APB3) */
-    d2ppre1 = <2>; /* 240MHz / 2 = 120MHz (APB1) */
-    d2ppre2 = <2>; /* 240MHz / 2 = 120MHz (APB2) */
-    d3ppre = <2>;  /* 240MHz / 2 = 120MHz (APB4) */
+	clocks = <&pll>;
+	clock-frequency = <DT_FREQ_M(480)>;
+	d1cpre = <1>;   /* SYSCLK / 1 = 480MHz */
+	hpre = <2>;    /* 480MHz / 2 = 240MHz (Max AHB speed) */
+	d1ppre = <2>;  /* 240MHz / 2 = 120MHz (APB3) */
+	d2ppre1 = <2>; /* 240MHz / 2 = 120MHz (APB1) */
+	d2ppre2 = <2>; /* 240MHz / 2 = 120MHz (APB2) */
+	d3ppre = <2>;  /* 240MHz / 2 = 120MHz (APB4) */
 };
 
 &pwr {
@@ -173,11 +173,11 @@
 };
 
 
-&timers4 {
+&timers2 {
 	status = "okay";
 	qdec: qdec {
 		status = "okay";
-		pinctrl-0 = <&tim4_ch1_pb6 &tim4_ch2_pb7>;
+		pinctrl-0 = <&tim2_ch1_pa15 &tim2_ch2_pb3>;
 		pinctrl-names = "default";
 		st,counts-per-revolution = <2048>;
 		st,input-filter-level = <1>; // default is 0

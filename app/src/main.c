@@ -49,7 +49,7 @@ void index_handler(const struct device *port, struct gpio_callback *cb, uint32_t
 {
     /* Reset the timer counter when index pulse is detected */
     /* Note: Direct register access is often fastest for this */
-    TIM4->CNT = 0;
+    TIM2->CNT = 0;
 }
 
 void setup_encoder(void)
@@ -112,7 +112,7 @@ struct sensor_test_sample
 };
 
 /* Buffer configuration */
-#define MAX_SAMPLES 100 // max ist around 8000
+#define MAX_SAMPLES 1040 // max ist around 8000
 static struct sensor_test_sample sample_buffer[MAX_SAMPLES];
 
 void dump_characterization_data(void)
@@ -301,8 +301,8 @@ int main(void)
     uint32_t initial_counts = spi_raw / 8;
 
     // 3. Directly set the STM32 Timer Counter register
-    // TIM4 is used based on your devicetree &timers4
-    TIM4->CNT = initial_counts;
+    // TIM2 is used based on your devicetree &timers2
+    TIM2->CNT = initial_counts;
     as5047p_dump_registers(spi3_dev, &spi_cfg, &cs_gpio);
     k_msleep(100);
 

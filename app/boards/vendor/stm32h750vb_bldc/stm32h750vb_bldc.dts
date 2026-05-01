@@ -33,7 +33,7 @@
 	leds {
 		compatible = "gpio-leds";
 		as5047p_cs: as5047p_cs {
-			gpios = <&gpioa 4 GPIO_ACTIVE_LOW>;
+			gpios = <&gpiod 6 GPIO_ACTIVE_LOW>;
 			label = "AS5047P_CS";
 		};
 	};

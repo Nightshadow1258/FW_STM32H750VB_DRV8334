@@ -287,11 +287,6 @@ int main(void)
         return -ENODEV;
     }
 
-    if (!device_is_ready(spi3_dev))
-    {
-        return -ENODEV;
-    }GPIO_PULL_DOWN
-
     // Setup the encoder pins for the ABI Interface
     setup_encoder();
 

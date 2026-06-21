@@ -19,4 +19,6 @@ project(app LANGUAGES C)
 target_sources(app PRIVATE 
     src/main.c
     src/as5047p.c
+    src/drv8334.c
+    src/storage_manager.c
     )

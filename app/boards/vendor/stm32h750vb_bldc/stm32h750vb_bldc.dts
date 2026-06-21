@@ -118,6 +118,35 @@
 	};
 };
 
+&spi1 {
+    pinctrl-0 = <&spi1_sck_pa5 &spi1_miso_pa6 &spi1_mosi_pd7>;
+    pinctrl-names = "default";
+    status = "okay";
+    cs-gpios = <&gpioa 4 GPIO_ACTIVE_LOW>;
+
+    drv8334: drv8334@0 {
+        compatible = "ti,drv8334";
+        reg = <0>;
+        spi-max-frequency = <10000000>;
+
+        /* Control GPIOs */
+        nsleep-gpios = <&gpiob 14 GPIO_ACTIVE_HIGH>;
+        drvoff-gpios = <&gpiob 15 GPIO_ACTIVE_HIGH>;
+        nfault-gpios = <&gpioe 15 GPIO_ACTIVE_LOW>;
+
+        /* PWM Interface Pins */
+        inha-gpios = <&gpioe 8 GPIO_ACTIVE_HIGH>;
+        inla-gpios = <&gpioe 9 GPIO_ACTIVE_HIGH>;
+        inhb-gpios = <&gpioe 10 GPIO_ACTIVE_HIGH>;
+        inlb-gpios = <&gpioe 11 GPIO_ACTIVE_HIGH>;
+        inhc-gpios = <&gpioe 12 GPIO_ACTIVE_HIGH>;
+        inlc-gpios = <&gpioe 13 GPIO_ACTIVE_HIGH>;
+    };
+};
+
+/* Note: ADC configuration for PC3_C, PB1, PB0 (SOA, SOB, SOC)
+   would typically be handled via the ADC peripheral nodes. */
+
 &spi3 {
 	status = "okay";
 	pinctrl-0 = <&spi3_sck_pc10 &spi3_miso_pc11 &spi3_mosi_pc12>;
@@ -158,7 +187,8 @@
 		spi-bus-width = <4>;
 		jedec-id = [ ef 40 18  ];
 		status = "okay";
-
+		/* Tell Zephyr to program the QE bit in Status Register 2 -> enables QSPI else only Singe Wire works*/
+		quad-enable-requirements = "S2B1v1";
 		partitions {
 			compatible = "fixed-partitions";
 			#address-cells = <1>;

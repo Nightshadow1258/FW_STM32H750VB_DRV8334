@@ -20,6 +20,8 @@
 #include <zephyr/drivers/sensor.h>
 
 #include "as5047p.h"
+#include "storage_manager.h"
+
 
 LOG_MODULE_REGISTER(app, LOG_LEVEL_INF);
 
@@ -212,46 +214,6 @@ K_THREAD_DEFINE(meas_thread_id, 2048, measurement_thread_entry, NULL, NULL, NULL
 #define STORAGE_NODE DT_ALIAS(storage_flash)
 
 
-static struct nvs_fs fs;
-
-void init_storage(void) {
-    struct flash_pages_info info;
-    fs.flash_device = DEVICE_DT_GET(DT_MTD_FROM_FIXED_PARTITION(STORAGE_NODE));
-    fs.offset = DT_REG_ADDR(STORAGE_NODE);
-    
-    flash_get_page_info_by_offs(fs.flash_device, fs.offset, &info);
-    fs.sector_size = info.size;
-    fs.sector_count = 3; /* Adjust based on partition size */
-
-    nvs_mount(&fs);
-}
-
-void save_factor(uint16_t id, float factor) {
-    nvs_write(&fs, id, &factor, sizeof(factor));
-}
-
-void load_factor(uint16_t id) {
-    float factor;
-    int rc;
-
-    /* * id: The unique identifier used during nvs_write
-     * &factor: The buffer to store the retrieved data
-     * sizeof(factor): The maximum number of bytes to read
-     */
-    rc = nvs_read(&fs, id, &factor, sizeof(factor));
-
-    if (rc > 0) {
-        /* Data successfully retrieved */
-        printk("Factor ID %d: %f\n", id, (double)factor);
-    } else if (rc == 0) {
-        /* ID not found */
-        printk("ID %d not found\n", id);
-    } else {
-        /* Error occurred */
-        printk("Error reading NVS: %d\n", rc);
-    }
-}
-
 // ADC Temp
 #include <zephyr/drivers/adc.h>
 
@@ -318,6 +280,9 @@ int main(void)
 
     printk("System Ready. Trigger enabled.\n");
 
+
+    storage_run_test();
+    
     while (1)
     {
         unsigned int count = k_sem_count_get(&meas_sem);

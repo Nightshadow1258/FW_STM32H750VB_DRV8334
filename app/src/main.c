@@ -21,7 +21,7 @@
 
 #include "as5047p.h"
 #include "storage_manager.h"
-
+#include "adc_manager.h"
 
 LOG_MODULE_REGISTER(app, LOG_LEVEL_INF);
 
@@ -37,7 +37,7 @@ static struct spi_config spi_cfg = {
                  SPI_TRANSFER_MSB |
                  SPI_MODE_CPHA,
     .slave = 0,
-    .cs = NULL, // <--- If this is set, CS is handled by the hardware of the MCU, NULL not connected manual mode
+    .cs = {NULL}, // <--- If this is set, CS is handled by the hardware of the MCU, NULL not connected manual mode
 };
 
 // ABI Interface
@@ -136,7 +136,7 @@ void dump_characterization_data(void)
         // 1. Calculate relative cycles from the start
         uint32_t rel_cycles = sample_buffer[i].timestamp - start_cycles;
 
-    /* Calculate ms as float then round to nearest integer */
+        /* Calculate ms as float then round to nearest integer */
         float rel_ms_float = (float)rel_cycles / (hw_freq / 1000.0f);
         uint32_t rel_ms_int = (uint32_t)(rel_ms_float + 0.5f);
 
@@ -194,7 +194,6 @@ void measurement_thread_entry(void *p1, void *p2, void *p3)
             sample_buffer[i].abi_ticks = precise_degrees;
             sample_buffer[i].spi_raw = raw_reg & 0x3FFF;
             /* Wait for the remainder of the 10ms interval */
-
         }
         k_timer_stop(&timer);
 
@@ -208,30 +207,21 @@ void measurement_thread_entry(void *p1, void *p2, void *p3)
 }
 K_THREAD_DEFINE(meas_thread_id, 2048, measurement_thread_entry, NULL, NULL, NULL, 2, 0, 0);
 
-//flash
+// flash
 #include <zephyr/drivers/flash.h>
 #include <zephyr/fs/nvs.h>
 #define STORAGE_NODE DT_ALIAS(storage_flash)
-
 
 // ADC Temp
 #include <zephyr/drivers/adc.h>
 
 #if !DT_NODE_EXISTS(DT_PATH(zephyr_user)) || \
-	!DT_NODE_HAS_PROP(DT_PATH(zephyr_user), io_channels)
+    !DT_NODE_HAS_PROP(DT_PATH(zephyr_user), io_channels)
 #error "No suitable devicetree overlay specified"
 #endif
 
 #define DT_SPEC_AND_COMMA(node_id, prop, idx) \
-	ADC_DT_SPEC_GET_BY_IDX(node_id, idx),
-
-/* Data of ADC io-channels specified in devicetree. */
-static const struct adc_dt_spec adc_channels[] = {
-	DT_FOREACH_PROP_ELEM(DT_PATH(zephyr_user), io_channels,
-			     DT_SPEC_AND_COMMA)
-};
-
-
+    ADC_DT_SPEC_GET_BY_IDX(node_id, idx),
 
 
 int main(void)
@@ -280,15 +270,50 @@ int main(void)
 
     printk("System Ready. Trigger enabled.\n");
 
-
     storage_run_test();
+
+
     
+    // ADC Measurement Testing
+    if (adc_manager_init() != 0)
+    {
+        printk("Fatal: ADC Module failed initialization\n");
+        return -ENODEV;
+    }
+
+    struct motor_current_samples current_loop_data;
+    int32_t temp_mv = 0;
+    uint32_t loop_counter = 0;
+
+    printk("System Testing Active. Ready to sample signals.\n");
+
     while (1)
     {
-        unsigned int count = k_sem_count_get(&meas_sem);
-        // Avoid frequent printf during active measurements
-        k_msleep(2000);
+        // 1. High Speed Current Tracking Call
+        if (adc_manager_read_currents(&current_loop_data) == 0)
+        {
+            /* Ready for FOC Current Loop Control manipulation here */
 
+            // Print diagnostic measurements every ~2 seconds (100 * 20ms)
+            if (loop_counter % 100 == 0)
+            {
+                printk("Currents Raw -> A: %d, B: %d, C: %d | Voltage -> A: %d mV, B: %d mV, C: %d mV\n",
+                       current_loop_data.raw_a, current_loop_data.raw_b, current_loop_data.raw_c,
+                       current_loop_data.mv_a, current_loop_data.mv_b, current_loop_data.mv_c);
+            }
+        }
+
+        // 2. Low-Speed Temperature Check executed roughly every 2 seconds
+        // if (loop_counter % 100 == 0)
+        // {
+        //     if (adc_manager_read_temp(&temp_mv) == 0)
+        //     {
+        //         printk("NTC Analog Input Level: %d mV\n", temp_mv);
+        //     }
+        // }
+
+        loop_counter++;
+        k_msleep(20); /* 20 ms tracking interval for debugging */
     }
 
     return 0;

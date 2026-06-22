@@ -21,4 +21,5 @@ target_sources(app PRIVATE
     src/as5047p.c
     src/drv8334.c
     src/storage_manager.c
+    src/adc_manager.c
     )

@@ -143,7 +143,7 @@ void dump_characterization_data(void)
         float linear_corrected = apply_linear_correction(sample_buffer[i].abi_ticks);
 
         // Print and then wait for the UART to clear
-        printk("%u,%u,%.4f,%.4f,%.4f,%.4f\n",
+        printk("%u,%u,%.4f,%.4f,%.4f\n",
                i,
                rel_ms_int,
                sample_buffer[i].abi_ticks,

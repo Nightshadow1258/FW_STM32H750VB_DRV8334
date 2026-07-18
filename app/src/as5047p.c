@@ -173,3 +173,60 @@ int as5047p_set_abi_4096(const struct device *spi_dev,
 
     return ret;
 }
+
+
+// 32-segment lookup table values from your script (example data)
+static const float32_t lut_corrections[32] = {
+0.000404,
+-2.431294,
+-5.089021,
+-8.636107,
+-11.983723,
+-15.152644,
+-18.250239,
+-20.732734,
+-21.619773,
+-20.150077,
+-16.291087,
+-10.822303,
+-5.028875,
+-0.220283,
+2.687999,
+3.375851,
+2.072639,
+-0.660724,
+-4.194493,
+-8.019444,
+-11.800608,
+-15.30694,
+-18.288365,
+-20.393309,
+-21.194315,
+-20.32789,
+-17.686035,
+-13.558797,
+-8.648572,
+-3.951602,
+-0.551477,
+0.803817
+};
+
+
+float32_t apply_linear_correction(float32_t raw_angle_deg) {
+    // CMSIS-DSP linear interpolation uses an instance structure
+    arm_linear_interp_instance_f32 S;
+    S.nValues = 32;
+    S.x1 = 0.0f;          // First point location
+    S.xSpacing = 11.25f;  // 360 / 32 elements
+    S.pYData = (float32_t *)lut_corrections;
+
+    // Evaluate the correction factor at the current raw position
+    float32_t correction = arm_linear_interp_f32(&S, raw_angle_deg);
+    
+    // Apply correction and wrap to 0-360
+    float32_t corrected_angle = raw_angle_deg + correction;
+    if (corrected_angle >= 360.0f) corrected_angle -= 360.0f;
+    if (corrected_angle < 0.0f) corrected_angle += 360.0f;
+    
+    return corrected_angle;
+}

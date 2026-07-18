@@ -114,12 +114,12 @@ struct sensor_test_sample
 };
 
 /* Buffer configuration */
-#define MAX_SAMPLES 1040 // max ist around 8000
+#define MAX_SAMPLES 4096 // max ist around 8000
 static struct sensor_test_sample sample_buffer[MAX_SAMPLES];
 
 void dump_characterization_data(void)
 {
-    // Crucial: Wait for the measurement thread to be 100% idle
+    //Wait for the measurement thread to be 100% idle
     k_msleep(50);
 
     // Get the hardware clock frequency
@@ -129,7 +129,7 @@ void dump_characterization_data(void)
     uint32_t start_cycles = sample_buffer[0].timestamp;
 
     // Use a simpler header
-    printk("idx,ts [ms],Angle from ABI [°],Angle from SPI [°]\n");
+    printk("idx,ts [ms],Angle from ABI [°],Angle from SPI [°],Angle Linearization [°]\n");
 
     for (uint32_t i = 0; i < MAX_SAMPLES; i++)
     {
@@ -140,16 +140,20 @@ void dump_characterization_data(void)
         float rel_ms_float = (float)rel_cycles / (hw_freq / 1000.0f);
         uint32_t rel_ms_int = (uint32_t)(rel_ms_float + 0.5f);
 
+        float linear_corrected = apply_linear_correction(sample_buffer[i].abi_ticks);
+
         // Print and then wait for the UART to clear
-        printk("%u,%u,%.4f,%.4f\n",
+        printk("%u,%u,%.4f,%.4f,%.4f,%.4f\n",
                i,
                rel_ms_int,
                sample_buffer[i].abi_ticks,
-               (double)sample_buffer[i].spi_raw * (360.0 / 16384.0));
+               (double)sample_buffer[i].spi_raw * (360.0 / 16384.0),
+               linear_corrected
+            );
 
         // Slow down the dump significantly to ensure no data loss
-        // 5ms delay per line is safe for 115200 baud
-        k_msleep(5);
+        // 3ms delay per line is safe for 115200 baud
+        k_msleep(3);
     }
 }
 
@@ -170,7 +174,7 @@ void measurement_thread_entry(void *p1, void *p2, void *p3)
         uint32_t start_time = k_uptime_get_32();
 
         /* Start the interval timer for 50ms */
-        k_timer_start(&timer, K_NO_WAIT, K_MSEC(10));
+        k_timer_start(&timer, K_NO_WAIT, K_MSEC(2.5)); // 2.5ms interval for 400Hz sampling
 
         /* Collect exactly MAX_SAMPLES */
         for (int i = 0; i < MAX_SAMPLES; i++)
@@ -253,7 +257,7 @@ int main(void)
     uint32_t initial_counts = spi_raw / 8;
 
     // 3. Directly set the STM32 Timer Counter register
-    // TIM2 is used based on your devicetree &timers2
+    // TIM2 is used for ABI
     TIM2->CNT = initial_counts;
     as5047p_dump_registers(spi3_dev, &spi_cfg, &cs_gpio);
     k_msleep(100);
@@ -295,7 +299,7 @@ int main(void)
             /* Ready for FOC Current Loop Control manipulation here */
 
             // Print diagnostic measurements every ~2 seconds (100 * 20ms)
-            if (loop_counter % 100 == 0)
+            if (loop_counter % 10000 == 0)
             {
                 printk("Currents Raw -> A: %d, B: %d, C: %d | Voltage -> A: %d mV, B: %d mV, C: %d mV\n",
                        current_loop_data.raw_a, current_loop_data.raw_b, current_loop_data.raw_c,

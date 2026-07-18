@@ -95,4 +95,14 @@ void as5047p_dump_registers(const struct device *spi_dev,
                             const struct spi_config *cfg,
                             const struct gpio_dt_spec *cs);
 
+
+#include <zephyr/kernel.h>
+#include <arm_math.h>
+
+float32_t apply_linear_correction(float32_t raw_angle_deg);
+float32_t apply_harmonic_correction(float32_t raw_angle_deg);
+
 #endif /* AS5047P_H */
+
+
+

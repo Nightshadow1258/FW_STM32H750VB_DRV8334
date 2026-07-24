@@ -1,0 +1,16 @@
+description: TI DRV8334 Motor Driver
+
+compatible: "ti,drv8334"
+
+include: [spi-device.yaml]
+
+properties:
+  nsleep-gpios:
+    type: phandle-array
+    required: true
+  drvoff-gpios:
+    type: phandle-array
+    required: true
+  nfault-gpios:
+    type: phandle-array
+    required: true

@@ -22,11 +22,12 @@
 #include "as5047p.h"
 #include "storage_manager.h"
 #include "adc_manager.h"
+#include "drv8334.h"
 
 LOG_MODULE_REGISTER(app, LOG_LEVEL_INF);
 
 #define SPI3_NODE DT_NODELABEL(spi3)
-static const struct device *spi3_dev = DEVICE_DT_GET(SPI3_NODE);
+static const struct device *dev_mag_as5047p = DEVICE_DT_GET(SPI3_NODE);
 
 static const struct gpio_dt_spec cs_gpio = GPIO_DT_SPEC_GET(DT_NODELABEL(as5047p_cs), gpios);
 
@@ -123,7 +124,7 @@ static struct sensor_test_sample sample_buffer[MAX_SAMPLES];
 
 void dump_characterization_data(void)
 {
-    //Wait for the measurement thread to be 100% idle
+    // Wait for the measurement thread to be 100% idle
     k_msleep(50);
 
     // Get the hardware clock frequency
@@ -152,8 +153,7 @@ void dump_characterization_data(void)
                rel_ms_int,
                sample_buffer[i].abi_ticks,
                (double)sample_buffer[i].spi_raw * (360.0 / 16384.0),
-               linear_corrected
-            );
+               linear_corrected);
 
         // Slow down the dump significantly to ensure no data loss
         // 3ms delay per line is safe for 115200 baud
@@ -196,7 +196,7 @@ void measurement_thread_entry(void *p1, void *p2, void *p3)
             }
 
             /* 2. Fetch SPI Raw Angle */
-            uint16_t raw_reg = as5047p_read_reg(spi3_dev, &spi_cfg, &cs_gpio, AS5047P_REG_ANGLECOM);
+            uint16_t raw_reg = as5047p_read_reg(dev_mag_as5047p, &spi_cfg, &cs_gpio, AS5047P_REG_ANGLECOM);
             /* 3. Store to RAM using the loop index 'i' */
             sample_buffer[i].timestamp = k_cycle_get_32();
             sample_buffer[i].abi_ticks = precise_degrees;
@@ -231,7 +231,6 @@ K_THREAD_DEFINE(meas_thread_id, 2048, measurement_thread_entry, NULL, NULL, NULL
 #define DT_SPEC_AND_COMMA(node_id, prop, idx) \
     ADC_DT_SPEC_GET_BY_IDX(node_id, idx),
 
-
 int main(void)
 {
     if (!gpio_is_ready_dt(&cs_gpio))
@@ -242,7 +241,7 @@ int main(void)
     /* Configure as output and set to High (Inactive) */
     gpio_pin_configure_dt(&cs_gpio, GPIO_OUTPUT_INACTIVE);
 
-    if (!device_is_ready(spi3_dev))
+    if (!device_is_ready(dev_mag_as5047p))
     {
         return -ENODEV;
     }
@@ -251,9 +250,9 @@ int main(void)
     setup_encoder();
 
     // Check register settings
-    as5047p_dump_registers(spi3_dev, &spi_cfg, &cs_gpio);
-    as5047p_set_abi_4096(spi3_dev, &spi_cfg, &cs_gpio);
-    uint16_t spi_raw = as5047p_read_reg(spi3_dev, &spi_cfg, &cs_gpio, AS5047P_REG_ANGLECOM);
+    as5047p_dump_registers(dev_mag_as5047p, &spi_cfg, &cs_gpio);
+    as5047p_set_abi_4096(dev_mag_as5047p, &spi_cfg, &cs_gpio);
+    uint16_t spi_raw = as5047p_read_reg(dev_mag_as5047p, &spi_cfg, &cs_gpio, AS5047P_REG_ANGLECOM);
     spi_raw &= 0x3FFF; // Mask to 14 bits
 
     // 2. Scale 14-bit (16384) to 12-bit (4096)
@@ -263,7 +262,7 @@ int main(void)
     // 3. Directly set the STM32 Timer Counter register
     // TIM2 is used for ABI
     TIM2->CNT = initial_counts;
-    as5047p_dump_registers(spi3_dev, &spi_cfg, &cs_gpio);
+    as5047p_dump_registers(dev_mag_as5047p, &spi_cfg, &cs_gpio);
     k_msleep(100);
 
     // Interrupt setup for measurement trigger
@@ -280,13 +279,22 @@ int main(void)
 
     storage_run_test();
 
-
-    
     // ADC Measurement Testing
     if (adc_manager_init() != 0)
     {
         printk("Fatal: ADC Module failed initialization\n");
         return -ENODEV;
+    }
+
+    // DRV8334 Initialization
+    int ret = drv8334_init(&drv_cfg);
+    if (ret < 0)
+    {
+        printk("DRV8334 Initialization Failed: %d\n", ret);
+    }
+    else
+    {
+        printk("DRV8334 Initialized successfully\n");
     }
 
     printk("System Testing Active. Ready to sample signals.\n");

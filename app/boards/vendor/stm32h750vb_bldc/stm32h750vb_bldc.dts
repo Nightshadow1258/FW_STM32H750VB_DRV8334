@@ -136,13 +136,13 @@
         drvoff-gpios = <&gpiob 15 GPIO_ACTIVE_HIGH>;
         nfault-gpios = <&gpioe 15 GPIO_ACTIVE_LOW>;
 
-        /* PWM Interface Pins */
-        inha-gpios = <&gpioe 8 GPIO_ACTIVE_HIGH>;
-        inla-gpios = <&gpioe 9 GPIO_ACTIVE_HIGH>;
-        inhb-gpios = <&gpioe 10 GPIO_ACTIVE_HIGH>;
-        inlb-gpios = <&gpioe 11 GPIO_ACTIVE_HIGH>;
-        inhc-gpios = <&gpioe 12 GPIO_ACTIVE_HIGH>;
-        inlc-gpios = <&gpioe 13 GPIO_ACTIVE_HIGH>;
+        /* PWM Interface Pins -> configured via pinctrl Timer1 */
+        // inha-gpios = <&gpioe 8 GPIO_ACTIVE_HIGH>;
+        // inla-gpios = <&gpioe 9 GPIO_ACTIVE_HIGH>;
+        // inhb-gpios = <&gpioe 10 GPIO_ACTIVE_HIGH>;
+        // inlb-gpios = <&gpioe 11 GPIO_ACTIVE_HIGH>;
+        // inhc-gpios = <&gpioe 12 GPIO_ACTIVE_HIGH>;
+        // inlc-gpios = <&gpioe 13 GPIO_ACTIVE_HIGH>;
     };
 };
 

@@ -9,7 +9,9 @@
 #include <zephyr/types.h>
 
 #include <zephyr/shell/shell.h>
-
+#include <zephyr/kernel.h>
+#include <zephyr/drivers/adc.h>
+#include <zephyr/sys/printk.h>
 
 /**
  * @brief Structure holding the latest raw and converted millivolt data.

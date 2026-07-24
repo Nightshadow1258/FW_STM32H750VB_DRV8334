@@ -68,14 +68,18 @@ void setup_encoder(void)
     gpio_pin_interrupt_configure_dt(&index_gpio, GPIO_INT_EDGE_TO_ACTIVE);
 }
 
-void read_encoder(void)
+double read_encoder(void)
 {
-    struct sensor_value val;
-    sensor_sample_fetch(qdec_dev);
-    sensor_channel_get(qdec_dev, SENSOR_CHAN_ROTATION, &val);
+    struct sensor_value qdec_value = {0};
+    double precise_degrees = 0.0;
+    if (sensor_sample_fetch(qdec_dev) == 0)
+    {
+        sensor_channel_get(qdec_dev, SENSOR_CHAN_ROTATION, &qdec_value);
 
-    /* val.val1 contains the current ticks */
-    // LOG_INF("Encoder Ticks: %d", val.val1);
+        // Convert to double to see the 0.08789 degree increments
+        precise_degrees = sensor_value_to_double(&qdec_value);
+    }
+    return precise_degrees;
 }
 
 // Measurement
@@ -285,39 +289,11 @@ int main(void)
         return -ENODEV;
     }
 
-    struct motor_current_samples current_loop_data;
-    int32_t temp_mv = 0;
-    uint32_t loop_counter = 0;
-
     printk("System Testing Active. Ready to sample signals.\n");
 
     while (1)
     {
-        // 1. High Speed Current Tracking Call
-        if (adc_manager_read_currents(&current_loop_data) == 0)
-        {
-            /* Ready for FOC Current Loop Control manipulation here */
-
-            // Print diagnostic measurements every ~2 seconds (100 * 20ms)
-            if (loop_counter % 10000 == 0)
-            {
-                printk("Currents Raw -> A: %d, B: %d, C: %d | Voltage -> A: %d mV, B: %d mV, C: %d mV\n",
-                       current_loop_data.raw_a, current_loop_data.raw_b, current_loop_data.raw_c,
-                       current_loop_data.mv_a, current_loop_data.mv_b, current_loop_data.mv_c);
-            }
-        }
-
-        // 2. Low-Speed Temperature Check executed roughly every 2 seconds
-        // if (loop_counter % 100 == 0)
-        // {
-        //     if (adc_manager_read_temp(&temp_mv) == 0)
-        //     {
-        //         printk("NTC Analog Input Level: %d mV\n", temp_mv);
-        //     }
-        // }
-
-        loop_counter++;
-        k_msleep(20); /* 20 ms tracking interval for debugging */
+        k_sleep(K_FOREVER);
     }
 
     return 0;

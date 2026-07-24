@@ -8,6 +8,9 @@
 
 #include <zephyr/types.h>
 
+#include <zephyr/shell/shell.h>
+
+
 /**
  * @brief Structure holding the latest raw and converted millivolt data.
  * Ready for extraction by control feedback or background loops.

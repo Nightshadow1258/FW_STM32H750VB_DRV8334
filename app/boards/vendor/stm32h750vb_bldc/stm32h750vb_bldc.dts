@@ -61,6 +61,7 @@
 		};
 	};
 
+
 };
 
 &clk_lse {
@@ -272,3 +273,62 @@
 	};
 };
 
+&pinctrl {
+    tim1_ch1n_pe8: tim1_ch1n_pe8 {
+        pinmux = <STM32_PINMUX('E', 8, AF1)>;
+        bias-pull-down;
+        drive-push-pull;
+        slew-rate = "very-high-speed";
+    };
+
+    tim1_ch1_pe9: tim1_ch1_pe9 {
+        pinmux = <STM32_PINMUX('E', 9, AF1)>;
+        bias-pull-down;
+        drive-push-pull;
+        slew-rate = "very-high-speed";
+    };
+
+    tim1_ch2n_pe10: tim1_ch2n_pe10 {
+        pinmux = <STM32_PINMUX('E', 10, AF1)>;
+        bias-pull-down;
+        drive-push-pull;
+        slew-rate = "very-high-speed";
+    };
+
+    tim1_ch2_pe11: tim1_ch2_pe11 {
+        pinmux = <STM32_PINMUX('E', 11, AF1)>;
+        bias-pull-down;
+        drive-push-pull;
+        slew-rate = "very-high-speed";
+    };
+
+    tim1_ch3n_pe12: tim1_ch3n_pe12 {
+        pinmux = <STM32_PINMUX('E', 12, AF1)>;
+        bias-pull-down;
+        drive-push-pull;
+        slew-rate = "very-high-speed";
+    };
+
+    tim1_ch3_pe13: tim1_ch3_pe13 {
+        pinmux = <STM32_PINMUX('E', 13, AF1)>;
+        bias-pull-down;
+        drive-push-pull;
+        slew-rate = "very-high-speed";
+    };
+};
+
+&timers1 {
+    status = "okay";
+    st,prescaler = <0>;
+
+    pwm1: pwm {
+        status = "okay";
+        pinctrl-0 = <&tim1_ch1n_pe8
+                     &tim1_ch1_pe9
+                     &tim1_ch2n_pe10
+                     &tim1_ch2_pe11
+                     &tim1_ch3n_pe12
+                     &tim1_ch3_pe13>;
+        pinctrl-names = "default";
+    };
+};

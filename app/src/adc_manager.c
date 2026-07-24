@@ -91,6 +91,7 @@ int adc_manager_read_currents(struct motor_current_samples *out_samples)
     return 0;
 }
 
+
 // int adc_manager_read_temp(int32_t *out_mv)
 // {
 //     if (!adc_ready || out_mv == NULL) {
@@ -115,3 +116,21 @@ int adc_manager_read_currents(struct motor_current_samples *out_samples)
 //     *out_mv = mv;
 //     return 0;
 // }
+
+
+//Shell command to manually trigger the process (for testing)
+static int shell_read_currents(const struct shell *sh, size_t argc, char **argv)
+{
+    shell_print(sh, "Current values:");
+    struct motor_current_samples csa_adc_samples;
+
+	adc_manager_read_currents(&csa_adc_samples);
+    shell_print(sh, "Currents Raw -> A: %d, B: %d, C: %d | Voltage -> A: %d mV, B: %d mV, C: %d mV",
+                csa_adc_samples.raw_a, csa_adc_samples.raw_b, csa_adc_samples.raw_c,
+                csa_adc_samples.mv_a, csa_adc_samples.mv_b, csa_adc_samples.mv_c);
+
+    return 0;
+}
+
+/* Register the command "start_process" */
+SHELL_CMD_REGISTER(read_currents, NULL, "Read current values", shell_read_currents);

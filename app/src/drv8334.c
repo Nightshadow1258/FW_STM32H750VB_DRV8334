@@ -85,10 +85,30 @@ int drv8334_init(const struct drv8334_config *cfg)
     gpio_pin_set_dt(&cfg->nsleep, 1);
     k_msleep(2); /* Wait tWAKE time */
 
-    /* Clear fault register */
-    uint16_t stat;
-    drv8334_reg_read(cfg, DRV8334_REG_IC_STAT1, &stat);
+    /* check DRV8334_Register_Map.ods for details on the init configuration */
+    drv8334_reg_write(cfg, DRV8334_REG_IC_CTRL3, 0xC009);
+    drv8334_reg_write(cfg, DRV8334_REG_GD_CTRL1, 0x0328);
+    drv8334_reg_write(cfg, DRV8334_REG_GD_CTRL2, 0x0717);
+    drv8334_reg_write(cfg, DRV8334_REG_GD_CTRL3, 0x0717);
+    drv8334_reg_write(cfg, DRV8334_REG_GD_CTRL3B, 0x2323);
+    drv8334_reg_write(cfg, DRV8334_REG_GD_CTRL4, 0x0200);
+    drv8334_reg_write(cfg, DRV8334_REG_GD_CTRL5, 0x0007);
+    drv8334_reg_write(cfg, DRV8334_REG_GD_CTRL6, 0x2323);
+    drv8334_reg_write(cfg, DRV8334_REG_GD_CTRL7, 0x2323);
 
+    drv8334_reg_write(cfg, DRV8334_REG_CSA_CTRL, 0x0888);  /* Set CSA gain to 40V/V for all channels */
+
+    drv8334_reg_write(cfg, DRV8334_REG_MON_CTRL1, 0x0200);
+    drv8334_reg_write(cfg, DRV8334_REG_MON_CTRL2, 0x1101);
+    drv8334_reg_write(cfg, DRV8334_REG_MON_CTRL3, 0x0042);
+    drv8334_reg_write(cfg, DRV8334_REG_MON_CTRL4, 0x0032);
+    // drv8334_reg_write(cfg, DRV8334_REG_MON_CTRL5, 0x0000); /* unchanged */
+    drv8334_reg_write(cfg, DRV8334_REG_MON_CTRL6, 0x0200);
+    
+    // drv8334_reg_write(cfg, DRV8334_REG_DIAG_CTRL1, 0x0000); /* unchanged */
+
+    /* Clear fault register */
+    drv8334_reg_write(cfg, DRV8334_REG_IC_CTRL2, 0x8807); /* Clear latched faults */
     /* Enable Gate Driver */
     gpio_pin_set_dt(&cfg->drvoff, 0);
 

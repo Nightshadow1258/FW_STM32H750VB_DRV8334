@@ -14,3 +14,12 @@ module = APP
 module-str = APP
 source "subsys/logging/Kconfig.template.log_config"
 rsource "../Kconfig"
+
+# Force compilation of STM32 HAL drivers
+config APP_ENABLE_STM32_HAL
+    bool "Enable Direct STM32 HAL Calls"
+    default y
+    select USE_STM32_HAL_ADC
+    select USE_STM32_HAL_ADC_EX
+    select USE_STM32_HAL_TIM
+    select USE_STM32_HAL_TIM_EX

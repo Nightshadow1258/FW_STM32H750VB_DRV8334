@@ -5,6 +5,10 @@
 #include <zephyr/drivers/gpio.h>
 #include <zephyr/shell/shell.h>
 
+
+#include <zephyr/kernel.h>
+#include <stm32h7xx_hal.h>
+
 /* SPI Protocol Definitions */
 #define DRV8334_READ_BIT                0x8000
 #define DRV8334_WRITE_BIT               0x0000
@@ -46,6 +50,16 @@
 #define DRV8334_GDRV_CTRL_1_PWM_6X      0x0000
 #define DRV8334_GDRV_CTRL_1_PWM_3X      0x0020
 
+// Timer and Dead-Time Configuration for STM32H750 (Core @ 480 MHz, APB2 Timers @ 240 MHz)
+#define TIM_CLOCK_HZ      240000000
+#define PWM_FREQ_HZ       20000
+#define TIM_PERIOD_TICKS (TIM_CLOCK_HZ / (2 * PWM_FREQ_HZ))
+#define DEAD_TIME_NS      500 /* 500ns dead time for DRV8334 */
+#define DEAD_TIME_TICKS   ((uint32_t)((DEAD_TIME_NS * 240) / 1000)) /* ~120 ticks */
+
+
+extern TIM_HandleTypeDef htim1;
+
 struct drv8334_config {
     struct spi_dt_spec spi;
     struct gpio_dt_spec nsleep;
@@ -61,5 +75,8 @@ int drv8334_reg_read(const struct drv8334_config *cfg, uint8_t addr, uint16_t *d
 
 int drv8334_dump_status_regs(const struct drv8334_config *cfg, const struct shell *sh);
 int drv8334_dump_control_regs(const struct drv8334_config *cfg, const struct shell *sh);
+
+void init_tim1_foc(void); 
+
 
 #endif

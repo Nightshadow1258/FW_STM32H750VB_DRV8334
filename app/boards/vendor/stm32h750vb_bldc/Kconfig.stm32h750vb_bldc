@@ -10,4 +10,5 @@ config SOC_SERIES_STM32H7X
 config SOC_STM32H750XX
     default y
 
+
 endif # BOARD_STM32H750VB_BLDC

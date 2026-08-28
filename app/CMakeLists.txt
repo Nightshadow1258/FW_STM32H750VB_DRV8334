@@ -11,15 +11,10 @@ find_package(Zephyr REQUIRED HINTS $ENV{ZEPHYR_BASE})
 
 project(app LANGUAGES C)
 
-# Add custom driver directory
-# add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../drivers/sensor/as5047p build)
-# list(APPEND EXTRA_EXTERNAL_MODULE_DIRS ${CMAKE_CURRENT_SOURCE_DIR}/../drivers)
-# list(APPEND EXTRA_EXTERNAL_MODULE_DIRS ${CMAKE_CURRENT_SOURCE_DIR}/../lib)
-
 target_sources(app PRIVATE 
     src/main.c
     src/as5047p.c
     src/drv8334.c
     src/storage_manager.c
     src/adc_manager.c
-    )
+)

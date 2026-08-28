@@ -13,6 +13,12 @@
 #include <zephyr/drivers/adc.h>
 #include <zephyr/sys/printk.h>
 
+#include <stm32h7xx_hal.h>
+
+extern ADC_HandleTypeDef hadc1;
+extern ADC_HandleTypeDef hadc2;
+extern ADC_HandleTypeDef hadc3;
+
 /**
  * @brief Structure holding the latest raw and converted millivolt data.
  * Ready for extraction by control feedback or background loops.
@@ -46,5 +52,8 @@ int adc_manager_read_currents(struct motor_current_samples *out_samples);
  * @return 0 on success, negative error code on failure.
  */
 int adc_manager_read_temp(int32_t *out_mv);
+
+void init_adcs_simultaneous_foc(void);
+
 
 #endif /* ADC_MANAGER_H_ */

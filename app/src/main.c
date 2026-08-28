@@ -279,12 +279,24 @@ int main(void)
 
     storage_run_test();
 
-    // ADC Measurement Testing
-    if (adc_manager_init() != 0)
-    {
-        printk("Fatal: ADC Module failed initialization\n");
-        return -ENODEV;
-    }
+
+    init_tim1_foc();
+    init_adcs_simultaneous_foc();
+
+    /* Enable High-Side and Low-Side Output Channels on TIM1 */
+    HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_1);
+    HAL_TIMEx_PWMN_Start(&htim1, TIM_CHANNEL_1);
+    HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_2);
+    HAL_TIMEx_PWMN_Start(&htim1, TIM_CHANNEL_2);
+    HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_3);
+    HAL_TIMEx_PWMN_Start(&htim1, TIM_CHANNEL_3);
+
+    /* Enable Injected Hardware Triggered Conversions */
+    HAL_ADCEx_InjectedStart(&hadc3);
+    HAL_ADCEx_InjectedStart(&hadc2);
+    HAL_ADCEx_InjectedStart_IT(&hadc1); /* Master fires ISR on completion */
+
+
 
     // DRV8334 Initialization
     int ret = drv8334_init(&drv_cfg);

@@ -2,6 +2,7 @@
 #include <zephyr/kernel.h>
 #include <zephyr/sys/crc.h>
 
+TIM_HandleTypeDef htim1;
 
 #define SPI1_NODE DT_NODELABEL(drv8334)
 
@@ -250,6 +251,54 @@ static int shell_gdu_reg_write(const struct shell *sh, size_t argc, char **argv)
     }
 
     return ret;
+}
+
+
+void init_tim1_foc(void)
+{
+    TIM_ClockConfigTypeDef sClockSourceConfig = {0};
+    TIM_MasterConfigTypeDef sMasterConfig = {0};
+    TIM_OC_InitTypeDef sConfigOC = {0};
+    TIM_BreakDeadTimeConfigTypeDef sBreakDeadTimeConfig = {0};
+
+    htim1.Instance = TIM1;
+    htim1.Init.Prescaler = 0;
+    
+    /* Center Aligned Mode 1: TRGO/Interrupt generated when counting down (underflow) */
+    htim1.Init.CounterMode = TIM_COUNTERMODE_CENTERALIGNED1;
+    htim1.Init.Period = TIM_PERIOD_TICKS;
+    htim1.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
+    htim1.Init.RepetitionCounter = 0;
+    htim1.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_ENABLE;
+    
+    HAL_TIM_Base_Init(&htim1);
+
+    /* Channel Configuration (50% default duty cycle) */
+    sConfigOC.OCMode = TIM_OCMODE_PWM1;
+    sConfigOC.Pulse = TIM_PERIOD_TICKS / 2;
+    sConfigOC.OCPolarity = TIM_OCPOLARITY_HIGH;
+    sConfigOC.OCNPolarity = TIM_OCNPOLARITY_HIGH;
+    sConfigOC.OCFastMode = TIM_OCFAST_DISABLE;
+    sConfigOC.OCIdleState = TIM_OCIDLESTATE_RESET;
+    sConfigOC.OCNIdleState = TIM_OCNIDLESTATE_RESET;
+
+    HAL_TIM_PWM_ConfigChannel(&htim1, &sConfigOC, TIM_CHANNEL_1);
+    HAL_TIM_PWM_ConfigChannel(&htim1, &sConfigOC, TIM_CHANNEL_2);
+    HAL_TIM_PWM_ConfigChannel(&htim1, &sConfigOC, TIM_CHANNEL_3);
+
+    /* TRGO Trigger Output on Timer Update (Underflow Event) */
+    sMasterConfig.MasterOutputTrigger = TIM_TRGO_UPDATE;
+    sMasterConfig.MasterOutputTrigger2 = TIM_TRGO2_RESET;
+    sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
+    HAL_TIMEx_MasterConfigSynchronization(&htim1, &sMasterConfig);
+
+    /* Dead-Time and Safety Configuration */
+    sBreakDeadTimeConfig.OffStateRunMode = TIM_OSSR_ENABLE;
+    sBreakDeadTimeConfig.OffStateIDLEMode = TIM_OSSI_ENABLE;
+    sBreakDeadTimeConfig.LockLevel = TIM_LOCKLEVEL_OFF;
+    sBreakDeadTimeConfig.DeadTime = DEAD_TIME_TICKS;
+    sBreakDeadTimeConfig.BreakState = TIM_BREAK_DISABLE;
+    HAL_TIMEx_ConfigBreakDeadTime(&htim1, &sBreakDeadTimeConfig);
 }
 
 SHELL_CMD_REGISTER(gdu_dump_status, NULL, "Dump DRV8334 status registers", shell_gdu_dump_status);

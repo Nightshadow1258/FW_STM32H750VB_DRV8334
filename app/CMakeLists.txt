@@ -17,4 +17,5 @@ target_sources(app PRIVATE
     src/drv8334.c
     src/storage_manager.c
     src/adc_manager.c
+    src/pwm_timer.c
 )

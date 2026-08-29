@@ -13,11 +13,16 @@
 #include <zephyr/drivers/adc.h>
 #include <zephyr/sys/printk.h>
 
+
+
 #include <stm32h7xx_hal.h>
+#include <stm32h7xx_hal_gpio.h>
+#include <stdlib.h>
 
 extern ADC_HandleTypeDef hadc1;
 extern ADC_HandleTypeDef hadc2;
 extern ADC_HandleTypeDef hadc3;
+
 
 /**
  * @brief Structure holding the latest raw and converted millivolt data.
@@ -32,11 +37,6 @@ struct motor_current_samples {
     int32_t mv_c;
 };
 
-/**
- * @brief Initializes all three physical ADC channels and sets up structures.
- * @return 0 on success, negative error code on failure.
- */
-int adc_manager_init(void);
 
 /**
  * @brief Performs a synchronized read of Phase A, B, and C currents.
@@ -54,6 +54,5 @@ int adc_manager_read_currents(struct motor_current_samples *out_samples);
 int adc_manager_read_temp(int32_t *out_mv);
 
 void init_adcs_simultaneous_foc(void);
-
 
 #endif /* ADC_MANAGER_H_ */

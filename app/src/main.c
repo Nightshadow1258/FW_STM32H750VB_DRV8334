@@ -23,6 +23,7 @@
 #include "storage_manager.h"
 #include "adc_manager.h"
 #include "drv8334.h"
+#include "pwm_timer.h"
 
 LOG_MODULE_REGISTER(app, LOG_LEVEL_INF);
 
@@ -151,9 +152,9 @@ void dump_characterization_data(void)
         printk("%u,%u,%.4f,%.4f,%.4f\n",
                i,
                rel_ms_int,
-               sample_buffer[i].abi_ticks,
+               (double)sample_buffer[i].abi_ticks,
                (double)sample_buffer[i].spi_raw * (360.0 / 16384.0),
-               linear_corrected);
+               (double)linear_corrected);
 
         // Slow down the dump significantly to ensure no data loss
         // 3ms delay per line is safe for 115200 baud
@@ -280,25 +281,10 @@ int main(void)
     storage_run_test();
 
 
-    init_tim1_foc();
-    init_adcs_simultaneous_foc();
-
-    /* Enable High-Side and Low-Side Output Channels on TIM1 */
-    HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_1);
-    HAL_TIMEx_PWMN_Start(&htim1, TIM_CHANNEL_1);
-    HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_2);
-    HAL_TIMEx_PWMN_Start(&htim1, TIM_CHANNEL_2);
-    HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_3);
-    HAL_TIMEx_PWMN_Start(&htim1, TIM_CHANNEL_3);
-
-    /* Enable Injected Hardware Triggered Conversions */
-    HAL_ADCEx_InjectedStart(&hadc3);
-    HAL_ADCEx_InjectedStart(&hadc2);
-    HAL_ADCEx_InjectedStart_IT(&hadc1); /* Master fires ISR on completion */
-
-
+    start_center_aligned_3phase_pwm();
 
     // DRV8334 Initialization
+
     int ret = drv8334_init(&drv_cfg);
     if (ret < 0)
     {

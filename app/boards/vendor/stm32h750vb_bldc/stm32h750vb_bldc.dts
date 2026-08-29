@@ -9,8 +9,7 @@
 #include <st/h7/stm32h750vbtx-pinctrl.dtsi>
 #include <zephyr/dt-bindings/input/input-event-codes.h>
 #include "stm32h750vb_bldc.dtsi"
-
-
+#include <zephyr/dt-bindings/timer/stm32-timer.h>
 / {
 	model = "VCC-GND Studio STM32H750VB";
 	compatible = "st,stm32h750vb";
@@ -205,6 +204,98 @@
 };
 
 
+
+&adc1 {
+    status = "okay";
+    #address-cells = <1>;
+    #size-cells = <0>;
+    st,adc-clock-source = "SYNC";
+    st,adc-prescaler = <1>;
+
+    channel@9 {
+        reg = <9>;
+        zephyr,gain = "ADC_GAIN_1";
+        zephyr,reference = "ADC_REF_INTERNAL";
+        zephyr,acquisition-time = <ADC_ACQ_TIME_DEFAULT>;
+        zephyr,resolution = <12>;
+    };
+};
+
+&adc2 {
+    status = "okay";
+    #address-cells = <1>;
+    #size-cells = <0>;
+    st,adc-clock-source = "SYNC";
+    st,adc-prescaler = <1>;
+
+    channel@5 {
+        reg = <5>;
+        zephyr,gain = "ADC_GAIN_1";
+        zephyr,reference = "ADC_REF_INTERNAL";
+        zephyr,acquisition-time = <ADC_ACQ_TIME_DEFAULT>;
+        zephyr,resolution = <12>;
+    };
+};
+
+&adc3 {
+    status = "okay";
+    #address-cells = <1>;
+    #size-cells = <0>;
+    st,adc-clock-source = "SYNC";
+    st,adc-prescaler = <1>;
+
+    channel@1 {
+        reg = <1>;
+        zephyr,gain = "ADC_GAIN_1";
+        zephyr,reference = "ADC_REF_INTERNAL";
+        zephyr,acquisition-time = <ADC_ACQ_TIME_DEFAULT>;
+        zephyr,resolution = <12>;
+    };
+};
+
+/* Pin Control Definition */
+&pinctrl {
+    tim1_ch1n_pe8: tim1_ch1n_pe8 {
+        pinmux = <STM32_PINMUX('E', 8, AF1)>;
+        drive-push-pull;
+    };
+    tim1_ch1_pe9: tim1_ch1_pe9 {
+        pinmux = <STM32_PINMUX('E', 9, AF1)>;
+        drive-push-pull;
+    };
+    tim1_ch2n_pe10: tim1_ch2n_pe10 {
+        pinmux = <STM32_PINMUX('E', 10, AF1)>;
+        drive-push-pull;
+    };
+    tim1_ch2_pe11: tim1_ch2_pe11 {
+        pinmux = <STM32_PINMUX('E', 11, AF1)>;
+        drive-push-pull;
+    };
+    tim1_ch3n_pe12: tim1_ch3n_pe12 {
+        pinmux = <STM32_PINMUX('E', 12, AF1)>;
+        drive-push-pull;
+    };
+    tim1_ch3_pe13: tim1_ch3_pe13 {
+        pinmux = <STM32_PINMUX('E', 13, AF1)>;
+        drive-push-pull;
+    };
+};
+
+/* Timer Base Configuration */
+&timers1 {
+    status = "okay";
+    st,prescaler = <0>;
+
+    pwm1: pwm {
+        status = "okay";
+        compatible = "st,stm32-pwm";
+        pinctrl-0 = <&tim1_ch1n_pe8 &tim1_ch1_pe9
+                     &tim1_ch2n_pe10 &tim1_ch2_pe11
+                     &tim1_ch3n_pe12 &tim1_ch3_pe13>;
+        pinctrl-names = "default";
+    };
+};
+
 &timers2 {
 	status = "okay";
 	qdec: qdec {
@@ -214,74 +305,4 @@
 		st,counts-per-revolution = <2048>;
 		st,input-filter-level = <1>; // default is 0
 	};
-};
-
-&adc1 {
-	status = "okay";
-	#address-cells = <1>;
-	#size-cells = <0>;
-	st,adc-clock-source = "SYNC";
-	st,adc-prescaler = <1>;
-
-	channel@9 {
-		reg = <9>;
-		zephyr,gain = "ADC_GAIN_1";
-		zephyr,reference = "ADC_REF_INTERNAL";
-		zephyr,acquisition-time = <ADC_ACQ_TIME_DEFAULT>;
-		zephyr,resolution = <12>;
-	};
-
-	// broken due to internal use - not sure how to fix this yet, maybe use adc3 for temp sensor and adc1 for the 3 shunt voltages? or just use adc2 for the 3 shunt voltages and adc1 for the temp sensor? will have to test this out.
-	// channel@10 {
-	// 	reg = <10>;
-	// 	zephyr,gain = "ADC_GAIN_1";
-	// 	zephyr,reference = "ADC_REF_INTERNAL";
-	// 	zephyr,acquisition-time = <ADC_ACQ_TIME_DEFAULT>;
-	// 	zephyr,resolution = <12>;
-	// };
-};
-
-&adc2 {
-	status = "okay";
-	#address-cells = <1>;
-	#size-cells = <0>;
-	st,adc-clock-source = "SYNC";
-	st,adc-prescaler = <1>;
-
-	channel@5 {
-		reg = <5>;
-		zephyr,gain = "ADC_GAIN_1";
-		zephyr,reference = "ADC_REF_INTERNAL";
-		zephyr,acquisition-time = <ADC_ACQ_TIME_DEFAULT>;
-		zephyr,resolution = <12>;
-	};
-};
-
-&adc3 {
-	status = "okay";
-	#address-cells = <1>;
-	#size-cells = <0>;
-	st,adc-clock-source = "SYNC";
-	st,adc-prescaler = <1>;
-
-	channel@1 {
-		reg = <1>;
-		zephyr,gain = "ADC_GAIN_1";
-		zephyr,reference = "ADC_REF_INTERNAL";
-		zephyr,acquisition-time = <ADC_ACQ_TIME_DEFAULT>;
-		zephyr,resolution = <12>;
-	};
-};
-
-&timers1 {
-    status = "okay";
-    st,prescaler = <0>;
-
-    pwm1: pwm {
-        status = "okay";
-        pinctrl-0 = <&tim1_ch1_pe9 &tim1_ch1n_pe8
-                     &tim1_ch2_pe11 &tim1_ch2n_pe10
-                     &tim1_ch3_pe13 &tim1_ch3n_pe12>;
-        pinctrl-names = "default";
-    };
 };

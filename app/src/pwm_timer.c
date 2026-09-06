@@ -15,8 +15,8 @@ void start_center_aligned_3phase_pwm(void)
 
     // 4. Set 50% duty cycle on all 3 channels
     LL_TIM_OC_SetCompareCH1(tim1, 3000);
-    LL_TIM_OC_SetCompareCH2(tim1, 3000);
-    LL_TIM_OC_SetCompareCH3(tim1, 3000);
+    LL_TIM_OC_SetCompareCH2(tim1, 2000);
+    LL_TIM_OC_SetCompareCH3(tim1, 4000);
 
     // 5. Configure PWM Mode 1 with shadow preloads
     LL_TIM_OC_SetMode(tim1, LL_TIM_CHANNEL_CH1, LL_TIM_OCMODE_PWM1);
@@ -44,12 +44,21 @@ void start_center_aligned_3phase_pwm(void)
     LL_TIM_CC_EnableChannel(tim1, LL_TIM_CHANNEL_CH3N);
 
     // 8. Configure BDTR: Set Dead-time, disable breaks, enable AOE
-    LL_TIM_OC_SetDeadTime(tim1, 120);
+    LL_TIM_OC_SetDeadTime(tim1, 120); // 500ns dead-time at 120 MHz 
     LL_TIM_DisableBRK(tim1);
     LL_TIM_EnableAutomaticOutput(tim1);
 
-    // 9. Load preload values into active shadow registers
+    // Configure TIM1 to send TRGO pulse on Update Event
+    LL_TIM_SetTriggerOutput(tim1, LL_TIM_TRGO_UPDATE); //should be used to trigger ADC conversions
+
+    // Set Repetition Counter to 1 so Update Event fires once per full up down cycle
+    LL_TIM_SetRepetitionCounter(tim1, 0);
+
+    // Generate software update event to reload RCR into shadow register
     LL_TIM_GenerateEvent_UPDATE(tim1);
+
+    // 9. Load preload values into active shadow registers
+    LL_TIM_ClearFlag_UPDATE(tim1);
 
     LL_TIM_EnableARRPreload(tim1);
     // 10. Enable main output (MOE bit) and start counter
@@ -110,11 +119,10 @@ static int cmd_dump_tim1(const struct shell *sh, size_t argc, char **argv)
     shell_print(sh, "CCR3         : %u", tim1->CCR3);
 
     /* Break and Dead-Time / Output Enable Register */
-    shell_print(sh, "BDTR         : 0x%08X (MOE=%d, AOE=%d, DTG=%d)",
-                tim1->BDTR,
-                (tim1->BDTR & TIM_BDTR_MOE) ? 1 : 0,
-                (tim1->BDTR & TIM_BDTR_AOE) ? 1 : 0,
-                (tim1->BDTR & TIM_BDTR_DTG_Msk));
+    shell_print(sh, "BDTR          : 0x%08X (MOE=%u, AOE=%u, DTG=%u)",
+            (unsigned int)((tim1->BDTR & TIM_BDTR_MOE_Msk) >> TIM_BDTR_MOE_Pos),
+            (unsigned int)((tim1->BDTR & TIM_BDTR_AOE_Msk) >> TIM_BDTR_AOE_Pos),
+            (unsigned int)(tim1->BDTR & TIM_BDTR_DTG_Msk));
 
     shell_print(sh, "====================================================");
 

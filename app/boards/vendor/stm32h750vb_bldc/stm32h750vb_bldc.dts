@@ -45,13 +45,6 @@
 		};
 	};
 
-	// ADC
-	zephyr,user {
-		/* Expose the handles to your C code via an indexing array */
-		io-channels = <&adc3 1>, <&adc2 5>, <&adc1 9>;
-		io-channel-names = "SOA", "SOB", "SOC";
-	};
-
 	trigger_signal {
 		compatible = "gpio-keys";
 		meas_trigger: meas_trigger {
@@ -81,6 +74,15 @@
 	clocks = <&clk_hse>;
 	status = "okay";
 };
+
+&pll2 {
+    div-m = <2>;
+    mul-n = <25>;
+    div-p = <1>;   /* (16 MHz / 2) * 25 / 1 = 100 MHz */
+    clocks = <&clk_hse>;
+    status = "okay";
+};
+
 
 &rcc {
 	clocks = <&pll>;
@@ -204,54 +206,40 @@
 };
 
 
+/* Define Analog Pin Control Configurations */
+&pinctrl {
+    adc1_inp9_pb0: adc1_inp9_pb0 {
+        pinmux = <STM32_PINMUX('B', 0, ANALOG)>;
+	bias-disable;
+    };
+    adc2_inp5_pb1: adc2_inp5_pb1 {
+        pinmux = <STM32_PINMUX('B', 1, ANALOG)>;
+	bias-disable;
+    };
+    adc3_inp1_pc3_c: adc3_inp1_pc3_c {
+        pinmux = <STM32_PINMUX('C', 3, ANALOG)>;
+	bias-disable;
+    };
+};
 
 &adc1 {
-    status = "okay";
-    #address-cells = <1>;
-    #size-cells = <0>;
-    st,adc-clock-source = "SYNC";
-    st,adc-prescaler = <1>;
-
-    channel@9 {
-        reg = <9>;
-        zephyr,gain = "ADC_GAIN_1";
-        zephyr,reference = "ADC_REF_INTERNAL";
-        zephyr,acquisition-time = <ADC_ACQ_TIME_DEFAULT>;
-        zephyr,resolution = <12>;
-    };
+    status = "disabled";
+    pinctrl-0 = <&adc1_inp9_pb0>;
+    pinctrl-names = "default";
 };
-
 &adc2 {
-    status = "okay";
-    #address-cells = <1>;
-    #size-cells = <0>;
-    st,adc-clock-source = "SYNC";
-    st,adc-prescaler = <1>;
-
-    channel@5 {
-        reg = <5>;
-        zephyr,gain = "ADC_GAIN_1";
-        zephyr,reference = "ADC_REF_INTERNAL";
-        zephyr,acquisition-time = <ADC_ACQ_TIME_DEFAULT>;
-        zephyr,resolution = <12>;
-    };
+    status = "disabled";
+    pinctrl-0 = <&adc2_inp5_pb1>;
+    pinctrl-names = "default";
 };
-
 &adc3 {
-    status = "okay";
-    #address-cells = <1>;
-    #size-cells = <0>;
-    st,adc-clock-source = "SYNC";
-    st,adc-prescaler = <1>;
+    status = "disabled";
+    pinctrl-0 = <&adc3_inp1_pc3_c>;
+    pinctrl-names = "default";
 
-    channel@1 {
-        reg = <1>;
-        zephyr,gain = "ADC_GAIN_1";
-        zephyr,reference = "ADC_REF_INTERNAL";
-        zephyr,acquisition-time = <ADC_ACQ_TIME_DEFAULT>;
-        zephyr,resolution = <12>;
-    };
 };
+
+
 
 /* Pin Control Definition */
 &pinctrl {

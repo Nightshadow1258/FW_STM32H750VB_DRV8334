@@ -109,7 +109,7 @@ int drv8334_init(const struct drv8334_config *cfg)
     /* Clear fault register */
     drv8334_reg_write(cfg, DRV8334_REG_IC_CTRL2, 0x8807); /* Clear latched faults */
     /* Enable Gate Driver */
-    //gpio_pin_set_dt(&cfg->drvoff, 0);
+    gpio_pin_set_dt(&cfg->drvoff, 0);
 
     return 0;
 }

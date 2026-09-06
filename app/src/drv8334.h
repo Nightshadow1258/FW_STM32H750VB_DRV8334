@@ -9,6 +9,7 @@
 #include <zephyr/kernel.h>
 #include <stm32h7xx_hal.h>
 
+
 /* SPI Protocol Definitions */
 #define DRV8334_READ_BIT                0x8000
 #define DRV8334_WRITE_BIT               0x0000

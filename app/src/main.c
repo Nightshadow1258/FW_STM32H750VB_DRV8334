@@ -221,17 +221,6 @@ K_THREAD_DEFINE(meas_thread_id, 2048, measurement_thread_entry, NULL, NULL, NULL
 #include <zephyr/fs/nvs.h>
 #define STORAGE_NODE DT_ALIAS(storage_flash)
 
-// ADC Temp
-#include <zephyr/drivers/adc.h>
-
-#if !DT_NODE_EXISTS(DT_PATH(zephyr_user)) || \
-    !DT_NODE_HAS_PROP(DT_PATH(zephyr_user), io_channels)
-#error "No suitable devicetree overlay specified"
-#endif
-
-#define DT_SPEC_AND_COMMA(node_id, prop, idx) \
-    ADC_DT_SPEC_GET_BY_IDX(node_id, idx),
-
 int main(void)
 {
     if (!gpio_is_ready_dt(&cs_gpio))
@@ -276,26 +265,29 @@ int main(void)
     gpio_init_callback(&trigger_cb_data, trigger_handler, BIT(trigger_gpio.pin));
     gpio_add_callback(trigger_gpio.port, &trigger_cb_data);
 
-    printk("System Ready. Trigger enabled.\n");
+    printk("INFO: System Ready. Trigger enabled.\n");
 
     storage_run_test();
 
 
     start_center_aligned_3phase_pwm();
+    printk("INFO: Timer 1 center aligned 3 phase pwm started.\n");
 
     // DRV8334 Initialization
-
+    manual_adc1_init(); 
+    printk("INFO: ADC1 initialized for phase current sampling.\n");
+    
     int ret = drv8334_init(&drv_cfg);
     if (ret < 0)
     {
-        printk("DRV8334 Initialization Failed: %d\n", ret);
+        printk("INFO: DRV8334 Initialization Failed: %d\n", ret);
     }
     else
     {
-        printk("DRV8334 Initialized successfully\n");
+        printk("INFO: DRV8334 Initialized successfully\n");
     }
 
-    printk("System Testing Active. Ready to sample signals.\n");
+    printk("INFO: System Testing Active. Ready to sample signals.\n");
 
     while (1)
     {

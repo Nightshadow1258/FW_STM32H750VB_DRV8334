@@ -274,16 +274,11 @@ int main(void)
 
     // DRV8334 Initialization
 
-    int ret = start_timer_triggered_adc_isr();
-    if (ret < 0)
-    {
-        printk("Failed to start ADC ISR mode: %d\n", ret);
-        return ret;
-    }
+    start_timer_triggered_adc_dma();
 
     printk("ADC ISR system initialized. Awaiting TIM1 TRGO events...\n");
 
-    ret = drv8334_init(&drv_cfg);
+    int ret = drv8334_init(&drv_cfg);
     if (ret < 0)
     {
         printk("INFO: DRV8334 Initialization Failed: %d\n", ret);

@@ -22,6 +22,8 @@
 #include <stm32h7xx_hal.h>
 #include <stm32h7xx_hal_adc_ex.h>
 
+#include <stm32h7xx_hal_dma.h>
+
 #include <zephyr/irq.h>
 #include <stm32_ll_adc.h>
 

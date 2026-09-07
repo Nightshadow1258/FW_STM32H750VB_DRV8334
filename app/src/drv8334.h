@@ -1,6 +1,7 @@
 #ifndef DRV8334_H
 #define DRV8334_H
 
+#include <stdlib.h>
 #include <zephyr/drivers/spi.h>
 #include <zephyr/drivers/gpio.h>
 #include <zephyr/shell/shell.h>

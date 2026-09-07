@@ -7,15 +7,47 @@
 
 #define ADC_VREF_MV 3300
 #define ADC_FULL_SCALE 65535 /* 16 bit resolution for STM32H7 ADC */
+#define ADC_BUFFER_SIZE 8
+
+/* 32-bit aligned array buffer to store 8 hardware measurements */
+static uint16_t adc1_dma_buffer[ADC_BUFFER_SIZE] __attribute__((aligned(32)));
+
 
 static volatile struct motor_current_sample latest_currents;
 volatile uint32_t g_adc_isr_count = 0;
 PINCTRL_DT_DEFINE(DT_NODELABEL(adc1));
 static ADC_HandleTypeDef hadc1;
+static DMA_HandleTypeDef hdma_adc1;
 
 static inline uint32_t raw_to_mv(uint16_t raw)
 {
     return ((uint32_t)raw * ADC_VREF_MV) / ADC_FULL_SCALE;
+}
+static int init_adc1_dma(void)
+{
+    /* 1. Enable DMAMUX1 and DMA2 clocks */
+    //__HAL_RCC_DMAMUX1_CLK_ENABLE();
+    __HAL_RCC_DMA2_CLK_ENABLE();
+
+    /* 2. Configure DMA2 Stream 0 */
+    hdma_adc1.Instance                 = DMA2_Stream0;
+    hdma_adc1.Init.Request             = DMA_REQUEST_ADC1;
+    hdma_adc1.Init.Direction           = DMA_PERIPH_TO_MEMORY;
+    hdma_adc1.Init.PeriphInc           = DMA_PINC_DISABLE;
+    hdma_adc1.Init.MemInc              = DMA_MINC_ENABLE;  
+    hdma_adc1.Init.PeriphDataAlignment = DMA_PDATAALIGN_HALFWORD; 
+    hdma_adc1.Init.MemDataAlignment    = DMA_MDATAALIGN_HALFWORD;    
+    hdma_adc1.Init.Mode                = DMA_CIRCULAR;               
+    hdma_adc1.Init.Priority            = DMA_PRIORITY_HIGH;
+    hdma_adc1.Init.FIFOMode            = DMA_FIFOMODE_DISABLE;
+
+    if (HAL_DMA_Init(&hdma_adc1) != HAL_OK) {
+        return -1;
+    }
+
+    __HAL_LINKDMA(&hadc1, DMA_Handle, hdma_adc1);
+
+    return 0;
 }
 
 int manual_adc1_init(void)
@@ -52,9 +84,12 @@ int manual_adc1_init(void)
     hadc1.Init.ExternalTrigConv = ADC_EXTERNALTRIG_T1_TRGO;
     hadc1.Init.ExternalTrigConvEdge = ADC_EXTERNALTRIGCONVEDGE_RISING;
 
-    hadc1.Init.ConversionDataManagement = ADC_CONVERSIONDATA_DR;
+    //hadc1.Init.ConversionDataManagement = ADC_CONVERSIONDATA_DR; 
+    hadc1.Init.ConversionDataManagement = ADC_CONVERSIONDATA_DMA_CIRCULAR;
     hadc1.Init.Overrun = ADC_OVR_DATA_OVERWRITTEN;
     hadc1.Init.OversamplingMode = DISABLE;
+
+    
 
     if (HAL_ADC_Init(&hadc1) != HAL_OK)
     {
@@ -90,70 +125,54 @@ int manual_adc1_init(void)
 
 }
 
-static void adc_isr_handler(const void *arg)
+int start_timer_triggered_adc_dma(void)
 {
-    ARG_UNUSED(arg);
-    HAL_ADC_IRQHandler(&hadc1);
-}
-
-void setup_adc_interrupt(void)
-{
-/* Connect ADC IRQ line to Zephyr kernel vector table */
-    IRQ_CONNECT(DT_IRQN(DT_NODELABEL(adc1)),
-                0,                  /* Direct priority value (0-15 on ARM Cortex-M) */
-                adc_isr_handler,
-                NULL,
-                0);                 /* Flags */
-
-    /* Enable interrupt line in NVIC */
-    irq_enable(DT_IRQN(DT_NODELABEL(adc1)));
-}
-
-void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef *hadc)
-{
-    if (hadc->Instance == ADC1) {
-        /* Read converted value from DR register (clears EOC flag automatically) */
-        latest_currents.raw_a = (uint16_t)HAL_ADC_GetValue(hadc);
-        g_adc_isr_count++;
-    }
-}
-
-int start_timer_triggered_adc_isr(void)
-{
+    /* 1. Complete ADC1 hardware configuration */
     int ret = manual_adc1_init();
     if (ret < 0) {
         return ret;
     }
-    
-    /* 1. Register and enable NVIC interrupt */
-    setup_adc_interrupt();
 
-    /* 2. Start ADC in Interrupt Mode (waits for TIM1 TRGO signal) */
-    if (HAL_ADC_Start_IT(&hadc1) != HAL_OK) {
-        return -1;
+    /* 2. Initialize DMA2 Stream 0 */
+    ret = init_adc1_dma();
+    if (ret < 0) {
+        return ret;
+    }
+
+    /* 3. Disable active CPU interrupts on ADC line */
+    irq_disable(DT_IRQN(DT_NODELABEL(adc1)));
+
+    /* 4. Start ADC in Circular DMA mode with 8-sample buffer size */
+    if (HAL_ADC_Start_DMA(&hadc1, (uint32_t *)adc1_dma_buffer, ADC_BUFFER_SIZE) != HAL_OK) {
+        return -4;
     }
 
     return 0;
 }
 
-static int cmd_read_isr_val(const struct shell *sh, size_t argc, char **argv)
+static int cmd_read_dma_buffer(const struct shell *sh, size_t argc, char **argv)
 {
-ARG_UNUSED(argc);
+    ARG_UNUSED(argc);
     ARG_UNUSED(argv);
 
-    uint16_t raw = latest_currents.raw_a;
-    uint32_t count = g_adc_isr_count;
-    uint32_t mv = raw_to_mv(raw);
+    /* Invalidate D-Cache on STM32H7 for DMA memory area before reading */
+    SCB_InvalidateDCache_by_Addr((uint32_t *)adc1_dma_buffer, sizeof(adc1_dma_buffer));
 
-    shell_print(sh, "ISR Conversion Count : %u", count);
-    shell_print(sh, "Latest Raw ADC Value : %u (0x%04X)", raw, raw);
-    shell_print(sh, "Calculated Voltage   : %u mV", mv);
-
+    shell_print(sh, "==========================================");
+    shell_print(sh, "      ADC1 DMA CIRCULAR BUFFER (8x)       ");
+    shell_print(sh, "==========================================");
+    
+    for (int i = 0; i < ADC_BUFFER_SIZE; i++) {
+        uint16_t raw = adc1_dma_buffer[i];
+        uint32_t mv = ((uint32_t)raw * 3300U) / 65535U;
+        shell_print(sh, "Buffer[%d] : Raw %u (0x%04X) -> %u mV", i, raw, raw, mv);
+    }
+    
+    shell_print(sh, "==========================================\n");
     return 0;
 }
 
-SHELL_CMD_REGISTER(read_isr, NULL, "Read current ISR updated ADC value", cmd_read_isr_val);
-
+SHELL_CMD_REGISTER(read_dma, NULL, "Read 8-element ADC1 DMA circular buffer", cmd_read_dma_buffer);
 
 uint32_t manual_adc1_read_single(void)
 {

@@ -239,8 +239,6 @@
 
 };
 
-
-
 /* Pin Control Definition */
 &pinctrl {
     tim1_ch1n_pe8: tim1_ch1n_pe8 {

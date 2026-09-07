@@ -9,7 +9,7 @@
 #define ADC_FULL_SCALE 65535 /* 16 bit resolution for STM32H7 ADC */
 
 static volatile struct motor_current_sample latest_currents;
-
+volatile uint32_t g_adc_isr_count = 0;
 PINCTRL_DT_DEFINE(DT_NODELABEL(adc1));
 static ADC_HandleTypeDef hadc1;
 
@@ -48,8 +48,10 @@ int manual_adc1_init(void)
     hadc1.Init.ContinuousConvMode = DISABLE;
     hadc1.Init.NbrOfConversion = 1;
     hadc1.Init.DiscontinuousConvMode = DISABLE;
-    hadc1.Init.ExternalTrigConv = ADC_SOFTWARE_START;
-    hadc1.Init.ExternalTrigConvEdge = ADC_EXTERNALTRIGCONVEDGE_NONE;
+
+    hadc1.Init.ExternalTrigConv = ADC_EXTERNALTRIG_T1_TRGO;
+    hadc1.Init.ExternalTrigConvEdge = ADC_EXTERNALTRIGCONVEDGE_RISING;
+
     hadc1.Init.ConversionDataManagement = ADC_CONVERSIONDATA_DR;
     hadc1.Init.Overrun = ADC_OVR_DATA_OVERWRITTEN;
     hadc1.Init.OversamplingMode = DISABLE;
@@ -75,7 +77,7 @@ int manual_adc1_init(void)
     ADC_ChannelConfTypeDef sConfig = {0};
     sConfig.Channel = ADC_CHANNEL_9;
     sConfig.Rank = ADC_REGULAR_RANK_1;
-    sConfig.SamplingTime = ADC_SAMPLETIME_387CYCLES_5; /* Max sampling time to eliminate impedance offset */
+    sConfig.SamplingTime = ADC_SAMPLETIME_64CYCLES_5; /* Max sampling time to eliminate impedance offset */
     sConfig.OffsetNumber = ADC_OFFSET_NONE;
     sConfig.SingleDiff = ADC_SINGLE_ENDED;
 
@@ -83,9 +85,75 @@ int manual_adc1_init(void)
     {
         return -3;
     }
+    /* Start ADC in Interrupt or DMA mode to receive conversions on TIM1 trigger events */
+    return 0;
+
+}
+
+static void adc_isr_handler(const void *arg)
+{
+    ARG_UNUSED(arg);
+    HAL_ADC_IRQHandler(&hadc1);
+}
+
+void setup_adc_interrupt(void)
+{
+/* Connect ADC IRQ line to Zephyr kernel vector table */
+    IRQ_CONNECT(DT_IRQN(DT_NODELABEL(adc1)),
+                0,                  /* Direct priority value (0-15 on ARM Cortex-M) */
+                adc_isr_handler,
+                NULL,
+                0);                 /* Flags */
+
+    /* Enable interrupt line in NVIC */
+    irq_enable(DT_IRQN(DT_NODELABEL(adc1)));
+}
+
+void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef *hadc)
+{
+    if (hadc->Instance == ADC1) {
+        /* Read converted value from DR register (clears EOC flag automatically) */
+        latest_currents.raw_a = (uint16_t)HAL_ADC_GetValue(hadc);
+        g_adc_isr_count++;
+    }
+}
+
+int start_timer_triggered_adc_isr(void)
+{
+    int ret = manual_adc1_init();
+    if (ret < 0) {
+        return ret;
+    }
+    
+    /* 1. Register and enable NVIC interrupt */
+    setup_adc_interrupt();
+
+    /* 2. Start ADC in Interrupt Mode (waits for TIM1 TRGO signal) */
+    if (HAL_ADC_Start_IT(&hadc1) != HAL_OK) {
+        return -1;
+    }
 
     return 0;
 }
+
+static int cmd_read_isr_val(const struct shell *sh, size_t argc, char **argv)
+{
+ARG_UNUSED(argc);
+    ARG_UNUSED(argv);
+
+    uint16_t raw = latest_currents.raw_a;
+    uint32_t count = g_adc_isr_count;
+    uint32_t mv = raw_to_mv(raw);
+
+    shell_print(sh, "ISR Conversion Count : %u", count);
+    shell_print(sh, "Latest Raw ADC Value : %u (0x%04X)", raw, raw);
+    shell_print(sh, "Calculated Voltage   : %u mV", mv);
+
+    return 0;
+}
+
+SHELL_CMD_REGISTER(read_isr, NULL, "Read current ISR updated ADC value", cmd_read_isr_val);
+
 
 uint32_t manual_adc1_read_single(void)
 {

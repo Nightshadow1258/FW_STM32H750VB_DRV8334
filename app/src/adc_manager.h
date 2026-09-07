@@ -12,6 +12,7 @@
 #include <zephyr/kernel.h>
 #include <zephyr/shell/shell.h>
 #include <stm32h7xx_hal.h>
+#include <zephyr/arch/cpu.h>
 #include <stm32h7xx_ll_bus.h>
 #include <stm32h7xx_ll_system.h>
 #include <zephyr/drivers/clock_control.h>
@@ -39,6 +40,9 @@ struct motor_current_sample {
     int32_t mv_a;
     int32_t mv_b;
     int32_t mv_c;
+    int32_t c_a;
+    int32_t c_b;
+    int32_t c_c;
 };
 
 /**

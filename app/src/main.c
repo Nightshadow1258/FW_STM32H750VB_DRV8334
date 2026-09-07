@@ -269,15 +269,21 @@ int main(void)
 
     storage_run_test();
 
-
     start_center_aligned_3phase_pwm();
     printk("INFO: Timer 1 center aligned 3 phase pwm started.\n");
 
     // DRV8334 Initialization
-    manual_adc1_init(); 
-    printk("INFO: ADC1 initialized for phase current sampling.\n");
-    
-    int ret = drv8334_init(&drv_cfg);
+
+    int ret = start_timer_triggered_adc_isr();
+    if (ret < 0)
+    {
+        printk("Failed to start ADC ISR mode: %d\n", ret);
+        return ret;
+    }
+
+    printk("ADC ISR system initialized. Awaiting TIM1 TRGO events...\n");
+
+    ret = drv8334_init(&drv_cfg);
     if (ret < 0)
     {
         printk("INFO: DRV8334 Initialization Failed: %d\n", ret);

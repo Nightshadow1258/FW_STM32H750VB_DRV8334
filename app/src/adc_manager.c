@@ -7,143 +7,219 @@
 
 #define ADC_VREF_MV 3300
 #define ADC_FULL_SCALE 65535 /* 16 bit resolution for STM32H7 ADC */
-#define ADC_BUFFER_SIZE 8
+#define ADC_BUFFER_SIZE 1
 
 /* 32-bit aligned array buffer to store 8 hardware measurements */
 static uint16_t adc1_dma_buffer[ADC_BUFFER_SIZE] __attribute__((aligned(32)));
-
+static uint16_t adc2_dma_buffer[ADC_BUFFER_SIZE] __attribute__((aligned(32)));
+static uint16_t adc3_dma_buffer[ADC_BUFFER_SIZE] __attribute__((aligned(32)));
 
 static volatile struct motor_current_sample latest_currents;
 volatile uint32_t g_adc_isr_count = 0;
+
 PINCTRL_DT_DEFINE(DT_NODELABEL(adc1));
 static ADC_HandleTypeDef hadc1;
 static DMA_HandleTypeDef hdma_adc1;
+
+PINCTRL_DT_DEFINE(DT_NODELABEL(adc2));
+static ADC_HandleTypeDef hadc2;
+static DMA_HandleTypeDef hdma_adc2;
+
+PINCTRL_DT_DEFINE(DT_NODELABEL(adc3));
+static ADC_HandleTypeDef hadc3;
+static DMA_HandleTypeDef hdma_adc3;
 
 static inline uint32_t raw_to_mv(uint16_t raw)
 {
     return ((uint32_t)raw * ADC_VREF_MV) / ADC_FULL_SCALE;
 }
-static int init_adc1_dma(void)
+int manual_adc_dma_init(DMA_HandleTypeDef *hdma,
+                        ADC_HandleTypeDef *hadc,
+                        DMA_Stream_TypeDef *stream_instance,
+                        uint32_t request)
 {
-    /* 1. Enable DMAMUX1 and DMA2 clocks */
-    //__HAL_RCC_DMAMUX1_CLK_ENABLE();
-    __HAL_RCC_DMA2_CLK_ENABLE();
+    /* 1. Enable DMA Clocks */
+    if (stream_instance >= DMA1_Stream0 && stream_instance <= DMA1_Stream7)
+    {
+        __HAL_RCC_DMA1_CLK_ENABLE();
+    }
+    else if (stream_instance >= DMA2_Stream0 && stream_instance <= DMA2_Stream7)
+    {
+        __HAL_RCC_DMA2_CLK_ENABLE();
+    }
 
-    /* 2. Configure DMA2 Stream 0 */
-    hdma_adc1.Instance                 = DMA2_Stream0;
-    hdma_adc1.Init.Request             = DMA_REQUEST_ADC1;
-    hdma_adc1.Init.Direction           = DMA_PERIPH_TO_MEMORY;
-    hdma_adc1.Init.PeriphInc           = DMA_PINC_DISABLE;
-    hdma_adc1.Init.MemInc              = DMA_MINC_ENABLE;  
-    hdma_adc1.Init.PeriphDataAlignment = DMA_PDATAALIGN_HALFWORD; 
-    hdma_adc1.Init.MemDataAlignment    = DMA_MDATAALIGN_HALFWORD;    
-    hdma_adc1.Init.Mode                = DMA_CIRCULAR;               
-    hdma_adc1.Init.Priority            = DMA_PRIORITY_HIGH;
-    hdma_adc1.Init.FIFOMode            = DMA_FIFOMODE_DISABLE;
+    /* 2. Configure DMA Stream */
+    hdma->Instance = stream_instance;
+    hdma->Init.Request = request;
+    hdma->Init.Direction = DMA_PERIPH_TO_MEMORY;
+    hdma->Init.PeriphInc = DMA_PINC_DISABLE;
+    hdma->Init.MemInc = DMA_MINC_ENABLE;
+    hdma->Init.PeriphDataAlignment = DMA_PDATAALIGN_HALFWORD;
+    hdma->Init.MemDataAlignment = DMA_MDATAALIGN_HALFWORD;
+    hdma->Init.Mode = DMA_CIRCULAR;
+    hdma->Init.Priority = DMA_PRIORITY_HIGH;
+    hdma->Init.FIFOMode = DMA_FIFOMODE_DISABLE;
 
-    if (HAL_DMA_Init(&hdma_adc1) != HAL_OK) {
+    if (HAL_DMA_Init(hdma) != HAL_OK)
+    {
         return -1;
     }
 
-    __HAL_LINKDMA(&hadc1, DMA_Handle, hdma_adc1);
+    /* Link DMA handle to ADC handle */
+    __HAL_LINKDMA(hadc, DMA_Handle, *hdma);
 
     return 0;
 }
 
-int manual_adc1_init(void)
+int manual_adc_init(ADC_HandleTypeDef *hadc,
+                    ADC_TypeDef *instance,
+                    const struct pinctrl_dev_config *pcfg,
+                    uint32_t channel)
 {
+    int ret;
+
     /* 1. Apply Pin Control from DTS */
-    const struct pinctrl_dev_config *pcfg = PINCTRL_DT_DEV_CONFIG_GET(DT_NODELABEL(adc1));
-    int ret = pinctrl_apply_state(pcfg, PINCTRL_STATE_DEFAULT);
-    if (ret < 0)
+    if (pcfg != NULL)
     {
-        return ret;
+        ret = pinctrl_apply_state(pcfg, PINCTRL_STATE_DEFAULT);
+        if (ret < 0)
+        {
+            return ret;
+        }
     }
 
     /* 2. Enable ADC Clock */
-    __HAL_RCC_ADC12_CLK_ENABLE();
-
-    uint32_t difsel = ADC1->DIFSEL;
-    if (difsel & (1U << 9))
+    if (instance == ADC1 || instance == ADC2)
     {
-        /* Clear bit 9 to force Single-Ended mode */
-        ADC1->DIFSEL &= ~(1U << 9);
+        __HAL_RCC_ADC12_CLK_ENABLE();
+    }
+#ifdef ADC3
+    else if (instance == ADC3)
+    {
+        __HAL_RCC_ADC3_CLK_ENABLE();
+    }
+#endif
+
+    /* Force Single Ended mode on selected channel */
+    if (channel < 32)
+    {
+        instance->DIFSEL &= ~(1U << channel);
     }
 
     /* 3. Configure ADC Instance */
-    hadc1.Instance = ADC1;
-    hadc1.Init.ClockPrescaler = ADC_CLOCK_SYNC_PCLK_DIV4;
-    hadc1.Init.Resolution = ADC_RESOLUTION_16B;
-    hadc1.Init.ScanConvMode = ADC_SCAN_DISABLE;
-    hadc1.Init.EOCSelection = ADC_EOC_SINGLE_CONV;
-    hadc1.Init.LowPowerAutoWait = DISABLE;
-    hadc1.Init.ContinuousConvMode = DISABLE;
-    hadc1.Init.NbrOfConversion = 1;
-    hadc1.Init.DiscontinuousConvMode = DISABLE;
+    hadc->Instance = instance;
+    hadc->Init.ClockPrescaler = ADC_CLOCK_SYNC_PCLK_DIV4;
+    hadc->Init.Resolution = ADC_RESOLUTION_16B;
+    hadc->Init.ScanConvMode = ADC_SCAN_DISABLE;
+    hadc->Init.EOCSelection = ADC_EOC_SINGLE_CONV;
+    hadc->Init.LowPowerAutoWait = DISABLE;
+    hadc->Init.ContinuousConvMode = DISABLE;
+    hadc->Init.NbrOfConversion = 1;
+    hadc->Init.DiscontinuousConvMode = DISABLE;
 
-    hadc1.Init.ExternalTrigConv = ADC_EXTERNALTRIG_T1_TRGO;
-    hadc1.Init.ExternalTrigConvEdge = ADC_EXTERNALTRIGCONVEDGE_RISING;
+    hadc->Init.ExternalTrigConv = ADC_EXTERNALTRIG_T1_TRGO;
+    hadc->Init.ExternalTrigConvEdge = ADC_EXTERNALTRIGCONVEDGE_RISING;
 
-    //hadc1.Init.ConversionDataManagement = ADC_CONVERSIONDATA_DR; 
-    hadc1.Init.ConversionDataManagement = ADC_CONVERSIONDATA_DMA_CIRCULAR;
-    hadc1.Init.Overrun = ADC_OVR_DATA_OVERWRITTEN;
-    hadc1.Init.OversamplingMode = DISABLE;
+    hadc->Init.ConversionDataManagement = ADC_CONVERSIONDATA_DMA_CIRCULAR;
+    hadc->Init.Overrun = ADC_OVR_DATA_OVERWRITTEN;
+    hadc->Init.OversamplingMode = DISABLE;
 
-    
-
-    if (HAL_ADC_Init(&hadc1) != HAL_OK)
+    if (HAL_ADC_Init(hadc) != HAL_OK)
     {
         return -1;
     }
 
-    hadc1.Instance->CR &= ~ADC_CR_DEEPPWD; /* Exit Deep Power Down */
-    hadc1.Instance->CR |= ADC_CR_ADVREGEN; /* Enable ADC Internal Regulator */
+    hadc->Instance->CR &= ~ADC_CR_DEEPPWD; /* Exit Deep Power Down */
+    hadc->Instance->CR |= ADC_CR_ADVREGEN; /* Enable ADC Internal Regulator */
 
-    /* Wait for LDO startup time (20us required by STM32H7 datasheet) */
+    /* Wait for LDO startup time */
     k_busy_wait(20);
 
     /* 4. Voltage Regulator and Calibration */
-    if (HAL_ADCEx_Calibration_Start(&hadc1, ADC_CALIB_OFFSET, ADC_SINGLE_ENDED) != HAL_OK)
+    if (HAL_ADCEx_Calibration_Start(hadc, ADC_CALIB_OFFSET, ADC_SINGLE_ENDED) != HAL_OK)
     {
         return -2;
     }
 
     /* 5. Channel Configuration */
     ADC_ChannelConfTypeDef sConfig = {0};
-    sConfig.Channel = ADC_CHANNEL_9;
+    sConfig.Channel = channel;
     sConfig.Rank = ADC_REGULAR_RANK_1;
-    sConfig.SamplingTime = ADC_SAMPLETIME_64CYCLES_5; /* Max sampling time to eliminate impedance offset */
+    sConfig.SamplingTime = ADC_SAMPLETIME_64CYCLES_5;
     sConfig.OffsetNumber = ADC_OFFSET_NONE;
     sConfig.SingleDiff = ADC_SINGLE_ENDED;
 
-    if (HAL_ADC_ConfigChannel(&hadc1, &sConfig) != HAL_OK)
+    if (HAL_ADC_ConfigChannel(hadc, &sConfig) != HAL_OK)
     {
         return -3;
     }
-    /* Start ADC in Interrupt or DMA mode to receive conversions on TIM1 trigger events */
-    return 0;
 
+    return 0;
 }
 
 int start_timer_triggered_adc_dma(void)
 {
+    int ret = -1;
     /* 1. Complete ADC1 hardware configuration */
-    int ret = manual_adc1_init();
-    if (ret < 0) {
+    const struct pinctrl_dev_config *pcfg1 = PINCTRL_DT_DEV_CONFIG_GET(DT_NODELABEL(adc1));
+    ret = manual_adc_init(&hadc1, ADC1, pcfg1, ADC_CHANNEL_9); /* Example: Channel 9 for Phase A current */
+    if (ret < 0)
+    {
+        return ret;
+    }
+    const struct pinctrl_dev_config *pcfg2 = PINCTRL_DT_DEV_CONFIG_GET(DT_NODELABEL(adc2));
+    ret = manual_adc_init(&hadc2, ADC2, pcfg2, ADC_CHANNEL_5); /* Example: Channel 5 for Phase B current */
+    if (ret < 0)
+    {
+        return ret;
+    }
+
+    const struct pinctrl_dev_config *pcfg3 = PINCTRL_DT_DEV_CONFIG_GET(DT_NODELABEL(adc3));
+    ret = manual_adc_init(&hadc3, ADC3, pcfg3, ADC_CHANNEL_1); /* Example: Channel 1 for Phase C current */
+    if (ret < 0)
+    {
         return ret;
     }
 
     /* 2. Initialize DMA2 Stream 0 */
-    ret = init_adc1_dma();
-    if (ret < 0) {
+    ret = manual_adc_dma_init(&hdma_adc1, &hadc1, DMA2_Stream0, DMA_REQUEST_ADC1);
+    if (ret < 0)
+    {
+        return ret;
+    }
+
+    /* 2. Initialize DMA2 Stream 0 */
+    ret = manual_adc_dma_init(&hdma_adc2, &hadc2, DMA2_Stream1, DMA_REQUEST_ADC2);
+    if (ret < 0)
+    {
+        return ret;
+    }
+
+    /* 2. Initialize DMA2 Stream 0 */
+    ret = manual_adc_dma_init(&hdma_adc3, &hadc3, DMA2_Stream2, DMA_REQUEST_ADC3);
+    if (ret < 0)
+    {
         return ret;
     }
 
     /* 3. Disable active CPU interrupts on ADC line */
     irq_disable(DT_IRQN(DT_NODELABEL(adc1)));
+    irq_disable(DT_IRQN(DT_NODELABEL(adc2)));
+    irq_disable(DT_IRQN(DT_NODELABEL(adc3)));
 
     /* 4. Start ADC in Circular DMA mode with 8-sample buffer size */
-    if (HAL_ADC_Start_DMA(&hadc1, (uint32_t *)adc1_dma_buffer, ADC_BUFFER_SIZE) != HAL_OK) {
+    if (HAL_ADC_Start_DMA(&hadc1, (uint32_t *)adc1_dma_buffer, ADC_BUFFER_SIZE) != HAL_OK)
+    {
+        return -4;
+    }
+
+        if (HAL_ADC_Start_DMA(&hadc2, (uint32_t *)adc2_dma_buffer, ADC_BUFFER_SIZE) != HAL_OK)
+    {
+        return -4;
+    }
+
+        if (HAL_ADC_Start_DMA(&hadc3, (uint32_t *)adc3_dma_buffer, ADC_BUFFER_SIZE) != HAL_OK)
+    {
         return -4;
     }
 
@@ -155,65 +231,49 @@ static int cmd_read_dma_buffer(const struct shell *sh, size_t argc, char **argv)
     ARG_UNUSED(argc);
     ARG_UNUSED(argv);
 
-    /* Invalidate D-Cache on STM32H7 for DMA memory area before reading */
-    SCB_InvalidateDCache_by_Addr((uint32_t *)adc1_dma_buffer, sizeof(adc1_dma_buffer));
+    struct adc_info {
+        const char *name;
+        uint16_t *buffer;
+        size_t size;
+    } adcs[] = {
+        {"ADC1", adc1_dma_buffer, sizeof(adc1_dma_buffer)},
+        {"ADC2", adc2_dma_buffer, sizeof(adc2_dma_buffer)},
+        {"ADC3", adc3_dma_buffer, sizeof(adc3_dma_buffer)},
+    };
 
-    shell_print(sh, "==========================================");
-    shell_print(sh, "      ADC1 DMA CIRCULAR BUFFER (8x)       ");
-    shell_print(sh, "==========================================");
-    
-    for (int i = 0; i < ADC_BUFFER_SIZE; i++) {
-        uint16_t raw = adc1_dma_buffer[i];
-        uint32_t mv = ((uint32_t)raw * 3300U) / 65535U;
-        shell_print(sh, "Buffer[%d] : Raw %u (0x%04X) -> %u mV", i, raw, raw, mv);
-    }
-    
-    shell_print(sh, "==========================================\n");
-    return 0;
-}
-
-SHELL_CMD_REGISTER(read_dma, NULL, "Read 8-element ADC1 DMA circular buffer", cmd_read_dma_buffer);
-
-uint32_t manual_adc1_read_single(void)
-{
-    HAL_ADC_Start(&hadc1);
-    if (HAL_ADC_PollForConversion(&hadc1, 10) == HAL_OK)
+    for (size_t a = 0; a < ARRAY_SIZE(adcs); a++) 
     {
-        return HAL_ADC_GetValue(&hadc1);
+        /* Invalidate D-Cache on STM32H7 for each DMA memory area before reading */
+        SCB_InvalidateDCache_by_Addr((uint32_t *)adcs[a].buffer, adcs[a].size);
+
+        shell_print(sh, "==========================================");
+        shell_print(sh, "      %s DMA CIRCULAR BUFFER (8x)       ", adcs[a].name);
+        shell_print(sh, "==========================================");
+
+        for (int i = 0; i < ADC_BUFFER_SIZE; i++)
+        {
+            uint16_t raw = adcs[a].buffer[i];
+            uint32_t mv = ((uint32_t)raw * 3300U) / 65535U;
+            shell_print(sh, "Buffer[%d] : Raw %u (0x%04X) -> %u mV", i, raw, raw, mv);
+        }
+
+        shell_print(sh, "==========================================\n");
     }
+
     return 0;
 }
 
-static int cmd_adc_init(const struct shell *sh, size_t argc, char **argv)
+SHELL_CMD_REGISTER(read_dma, NULL, "Read 1-element ADC1 DMA circular buffer", cmd_read_dma_buffer);
+
+uint32_t manual_adc_read_single(ADC_HandleTypeDef *hadc)
 {
-    int ret = manual_adc1_init();
-    if (ret < 0)
+    HAL_ADC_Start(hadc);
+    if (HAL_ADC_PollForConversion(hadc, 10) == HAL_OK)
     {
-        shell_error(sh, "ADC initialization failed: %d", ret);
-        return ret;
+        return HAL_ADC_GetValue(hadc);
     }
-
-    shell_print(sh, "ADC initialized successfully.");
     return 0;
 }
-
-static int cmd_adc_read(const struct shell *sh, size_t argc, char **argv)
-{
-
-    latest_currents.raw_a = (uint16_t)manual_adc1_read_single();
-    latest_currents.mv_a = raw_to_mv((uint16_t)latest_currents.raw_a);
-    shell_print(sh, "ADC Raw Value: %u", latest_currents.raw_a);
-    shell_print(sh, "ADC Millivolts: %u mV", latest_currents.mv_a);
-    return 0;
-}
-
-/* Register parent command 'custom_adc' with subcommands 'init' and 'read' */
-SHELL_STATIC_SUBCMD_SET_CREATE(sub_adc,
-                               SHELL_CMD(init, NULL, "Initialize ADC1 manually", cmd_adc_init),
-                               SHELL_CMD(read, NULL, "Read single value from ADC1", cmd_adc_read),
-                               SHELL_SUBCMD_SET_END);
-
-SHELL_CMD_REGISTER(custom_adc, &sub_adc, "Custom STM32 ADC commands", NULL);
 
 static int cmd_dump_adc_channel(const struct shell *sh, size_t argc, char **argv)
 {

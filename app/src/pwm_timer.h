@@ -7,5 +7,5 @@
 
 #define TIM1_NODE DT_NODELABEL(timers1)
 
-
+int start_center_aligned_3phase_pwm(void);
 int init_center_aligned_timer(void);

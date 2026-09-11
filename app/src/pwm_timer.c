@@ -1,6 +1,6 @@
 #include "pwm_timer.h"
 
-void start_center_aligned_3phase_pwm(void)
+int start_center_aligned_3phase_pwm(void)
 {
     TIM_TypeDef *tim1 = (TIM_TypeDef *)DT_REG_ADDR(TIM1_NODE);
 
@@ -64,6 +64,7 @@ void start_center_aligned_3phase_pwm(void)
     // 10. Enable main output (MOE bit) and start counter
     LL_TIM_EnableAllOutputs(tim1);
     LL_TIM_EnableCounter(tim1);
+    return 0;
 }
 
 static int cmd_dump_tim1(const struct shell *sh, size_t argc, char **argv)

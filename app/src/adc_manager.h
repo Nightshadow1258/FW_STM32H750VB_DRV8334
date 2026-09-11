@@ -35,17 +35,22 @@ extern "C" {
  * @brief Structure holding the latest raw and converted millivolt data.
  * Ready for extraction by control feedback or background loops.
  */
-struct motor_current_sample {
+struct motor_currents_sample {
     uint16_t raw_a;
     uint16_t raw_b;
     uint16_t raw_c;
-    int32_t mv_a;
-    int32_t mv_b;
-    int32_t mv_c;
-    int32_t c_a;
-    int32_t c_b;
-    int32_t c_c;
+    uint16_t raw_offset_a;
+    uint16_t raw_offset_b;
+    uint16_t raw_offset_c;
+    float i_a;
+    float i_b;
+    float i_c;
 };
+
+extern volatile struct motor_currents_sample g_latest_currents;
+
+int start_timer_triggered_adc_dma(void);
+int calibrate_current_offsets(void);
 
 /**
  * @brief Initializes ADC1, ADC2, and ADC3 for simultaneous triple injected
@@ -63,14 +68,14 @@ bool is_adc_ready(void);
  * @brief Thread-safe retrieval of the latest phase current measurements.
  * @param samples Pointer to output structure to receive current data.
  */
-void get_latest_currents(struct motor_current_samples *samples);
+void get_latest_currents(struct motor_current_sample *samples);
 
 /**
  * @brief Performs a synchronized read of Phase A, B, and C currents.
  * @param out_samples Pointer to output structure to copy the latest readings.
  * @return 0 on success, negative error code on failure.
  */
-int adc_manager_read_currents(struct motor_current_samples *out_samples);
+int adc_manager_read_currents(struct motor_current_sample *out_samples);
 
 /**
  * @brief Performs a low-priority synchronous sample of the NTC channel.

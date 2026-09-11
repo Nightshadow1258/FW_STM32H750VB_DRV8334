@@ -14,8 +14,14 @@ static uint16_t adc1_dma_buffer[ADC_BUFFER_SIZE] __attribute__((aligned(32)));
 static uint16_t adc2_dma_buffer[ADC_BUFFER_SIZE] __attribute__((aligned(32)));
 static uint16_t adc3_dma_buffer[ADC_BUFFER_SIZE] __attribute__((aligned(32)));
 
-static volatile struct motor_current_sample latest_currents;
+volatile struct motor_currents_sample g_latest_currents = {0};
 volatile uint32_t g_adc_isr_count = 0;
+
+#define OFFSET_RAW_MIN 22837U /* ~1150 mV */
+#define OFFSET_RAW_MAX 42698U /* ~2150 mV */
+#define CALIBRATION_SAMPLES 64U
+
+static bool g_offsets_calibrated = false;
 
 PINCTRL_DT_DEFINE(DT_NODELABEL(adc1));
 static ADC_HandleTypeDef hadc1;
@@ -145,7 +151,7 @@ int manual_adc_init(ADC_HandleTypeDef *hadc,
     ADC_ChannelConfTypeDef sConfig = {0};
     sConfig.Channel = channel;
     sConfig.Rank = ADC_REGULAR_RANK_1;
-    sConfig.SamplingTime = ADC_SAMPLETIME_64CYCLES_5;
+    sConfig.SamplingTime = ADC_SAMPLETIME_32CYCLES_5;
     sConfig.OffsetNumber = ADC_OFFSET_NONE;
     sConfig.SingleDiff = ADC_SINGLE_ENDED;
 
@@ -213,15 +219,73 @@ int start_timer_triggered_adc_dma(void)
         return -4;
     }
 
-        if (HAL_ADC_Start_DMA(&hadc2, (uint32_t *)adc2_dma_buffer, ADC_BUFFER_SIZE) != HAL_OK)
+    if (HAL_ADC_Start_DMA(&hadc2, (uint32_t *)adc2_dma_buffer, ADC_BUFFER_SIZE) != HAL_OK)
     {
         return -4;
     }
 
-        if (HAL_ADC_Start_DMA(&hadc3, (uint32_t *)adc3_dma_buffer, ADC_BUFFER_SIZE) != HAL_OK)
+    if (HAL_ADC_Start_DMA(&hadc3, (uint32_t *)adc3_dma_buffer, ADC_BUFFER_SIZE) != HAL_OK)
     {
         return -4;
     }
+
+    return 0;
+}
+
+int calibrate_current_offsets(void)
+{
+    uint32_t sum_a = 0;
+    uint32_t sum_b = 0;
+    uint32_t sum_c = 0;
+
+    /* Ensure DMA circular sampling is active */
+    if ((hadc1.Instance->CR & ADC_CR_ADSTART) == 0)
+    {
+        return -EAGAIN;
+    }
+
+    for (uint32_t i = 0; i < CALIBRATION_SAMPLES; i++)
+    {
+        /* Wait for next DMA write / Timer trigger cycle */
+        k_busy_wait(50);
+
+        /* Invalidate D-Cache to ensure fresh values from RAM */
+        SCB_InvalidateDCache_by_Addr((uint32_t *)adc1_dma_buffer, sizeof(adc1_dma_buffer));
+        SCB_InvalidateDCache_by_Addr((uint32_t *)adc2_dma_buffer, sizeof(adc2_dma_buffer));
+        SCB_InvalidateDCache_by_Addr((uint32_t *)adc3_dma_buffer, sizeof(adc3_dma_buffer));
+
+        sum_a += adc1_dma_buffer[0];
+        sum_b += adc2_dma_buffer[0];
+        sum_c += adc3_dma_buffer[0];
+    }
+
+    uint16_t avg_a = (uint16_t)(sum_a / CALIBRATION_SAMPLES);
+    uint16_t avg_b = (uint16_t)(sum_b / CALIBRATION_SAMPLES);
+    uint16_t avg_c = (uint16_t)(sum_c / CALIBRATION_SAMPLES);
+
+    /* Sanity Check 1: Symmetric offset window check [1.15V to 2.15V] */
+    if (avg_a < OFFSET_RAW_MIN || avg_a > OFFSET_RAW_MAX ||
+        avg_b < OFFSET_RAW_MIN || avg_b > OFFSET_RAW_MAX ||
+        avg_c < OFFSET_RAW_MIN || avg_c > OFFSET_RAW_MAX)
+    {
+        g_offsets_calibrated = false;
+        return -EINVAL;
+    }
+
+    /* Sanity Check 2: Phase-to-phase imbalance check (max 100mV spread between sense lines) */
+    uint16_t max_val = avg_a > avg_b ? (avg_a > avg_c ? avg_a : avg_c) : (avg_b > avg_c ? avg_b : avg_c);
+    uint16_t min_val = avg_a < avg_b ? (avg_a < avg_c ? avg_a : avg_c) : (avg_b < avg_c ? avg_b : avg_c);
+    if ((max_val - min_val) > 1986U) /* 1986 counts = ~100 mV */
+    {
+        g_offsets_calibrated = false;
+        return -EILSEQ;
+    }
+
+    /* Store offsets in global structure */
+    g_latest_currents.raw_offset_a = avg_a;
+    g_latest_currents.raw_offset_b = avg_b;
+    g_latest_currents.raw_offset_c = avg_c;
+    g_offsets_calibrated = true;
 
     return 0;
 }
@@ -231,7 +295,8 @@ static int cmd_read_dma_buffer(const struct shell *sh, size_t argc, char **argv)
     ARG_UNUSED(argc);
     ARG_UNUSED(argv);
 
-    struct adc_info {
+    struct adc_info
+    {
         const char *name;
         uint16_t *buffer;
         size_t size;
@@ -241,7 +306,7 @@ static int cmd_read_dma_buffer(const struct shell *sh, size_t argc, char **argv)
         {"ADC3", adc3_dma_buffer, sizeof(adc3_dma_buffer)},
     };
 
-    for (size_t a = 0; a < ARRAY_SIZE(adcs); a++) 
+    for (size_t a = 0; a < ARRAY_SIZE(adcs); a++)
     {
         /* Invalidate D-Cache on STM32H7 for each DMA memory area before reading */
         SCB_InvalidateDCache_by_Addr((uint32_t *)adcs[a].buffer, adcs[a].size);
@@ -614,3 +679,78 @@ static int cmd_verify_adc1_ch9_routing(const struct shell *sh, size_t argc, char
 }
 
 SHELL_CMD_REGISTER(check_adc_routing, NULL, "Verify PB0 to ADC1 CH9 routing registers", cmd_verify_adc1_ch9_routing);
+
+static int cmd_calibrate_offsets(const struct shell *sh, size_t argc, char **argv)
+{
+    ARG_UNUSED(argc);
+    ARG_UNUSED(argv);
+
+    shell_print(sh, "Sampling %u samples for Phase A, B, C current offset...", CALIBRATION_SAMPLES);
+
+    int ret = calibrate_current_offsets();
+    if (ret == -EINVAL)
+    {
+        shell_error(sh, "CALIBRATION FAILED: Raw reading out of bounds [1150mV - 2150mV]!");
+        return ret;
+    }
+    else if (ret == -EILSEQ)
+    {
+        shell_error(sh, "CALIBRATION FAILED: Excessive offset imbalance between phases (>100mV)!");
+        return ret;
+    }
+    else if (ret < 0)
+    {
+        shell_error(sh, "CALIBRATION FAILED: ADC/DMA not running (Error %d)", ret);
+        return ret;
+    }
+
+    uint32_t mv_a = raw_to_mv(g_latest_currents.raw_offset_a);
+    uint32_t mv_b = raw_to_mv(g_latest_currents.raw_offset_b);
+    uint32_t mv_c = raw_to_mv(g_latest_currents.raw_offset_c);
+
+    shell_print(sh, "==========================================");
+    shell_print(sh, "     CURRENT OFFSET CALIBRATION SUCCESS   ");
+    shell_print(sh, "==========================================");
+    shell_print(sh, "Phase A Offset : %u raw (%u mV)", g_latest_currents.raw_offset_a, mv_a);
+    shell_print(sh, "Phase B Offset : %u raw (%u mV)", g_latest_currents.raw_offset_b, mv_b);
+    shell_print(sh, "Phase C Offset : %u raw (%u mV)", g_latest_currents.raw_offset_c, mv_c);
+    shell_print(sh, "==========================================\n");
+
+    return 0;
+}
+
+SHELL_CMD_REGISTER(calibrate_offsets, NULL, "Calibrate zero-current ADC offsets", cmd_calibrate_offsets);
+
+int cmd_capture_adc_csv(const struct shell *sh, size_t argc, char **argv)
+{
+    ARG_UNUSED(argc);
+    ARG_UNUSED(argv);
+
+    const uint16_t total_samples = 1000;
+
+    /* Print CSV Header */
+    shell_print(sh, "SOA (raw), SOB (raw), SOC (raw)");
+
+    for (uint16_t i = 0; i < total_samples; i++)
+    {
+        /* Wait for next DMA write / Timer trigger cycle */
+        k_busy_wait(25);
+        /* Invalidate D-Cache to ensure fresh values from RAM */
+        SCB_InvalidateDCache_by_Addr((uint32_t *)adc1_dma_buffer, sizeof(adc1_dma_buffer));
+        SCB_InvalidateDCache_by_Addr((uint32_t *)adc2_dma_buffer, sizeof(adc2_dma_buffer));
+        SCB_InvalidateDCache_by_Addr((uint32_t *)adc3_dma_buffer, sizeof(adc3_dma_buffer));
+
+        /* Print CSV row */
+        shell_print(sh, "%u, %u, %u", adc1_dma_buffer[0], adc2_dma_buffer[0], adc3_dma_buffer[0]);
+    }
+
+    /* Optional small delay (e.g. 1ms) if you want time-spaced sampling */
+    /* k_msleep(1); */
+
+return 0;
+}
+
+/* Register the command with the Zephyr Shell */
+SHELL_CMD_ARG_REGISTER(capture_adc_csv, NULL,
+                       "Capture 1000 ADC raw samples in CSV format",
+                       cmd_capture_adc_csv, 1, 0);

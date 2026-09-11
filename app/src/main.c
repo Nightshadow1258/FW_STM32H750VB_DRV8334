@@ -273,8 +273,8 @@ int main(void)
     printk("INFO: Timer 1 center aligned 3 phase pwm started.\n");
 
     // DRV8334 Initialization
-
     start_timer_triggered_adc_dma();
+    calibrate_current_offsets();
 
     printk("ADC ISR system initialized. Awaiting TIM1 TRGO events...\n");
 

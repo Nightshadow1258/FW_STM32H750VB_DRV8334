@@ -272,12 +272,12 @@ int main(void)
     start_center_aligned_3phase_pwm();
     printk("INFO: Timer 1 center aligned 3 phase pwm started.\n");
 
-    // DRV8334 Initialization
+    printk("INFO: Starting ADC DMA triggered by TIM1 TRGO.\n");
     start_timer_triggered_adc_dma();
+    printk("INFO: ADC DMA started. Awaiting TIM1 TRGO events...\n");
     calibrate_current_offsets();
 
-    printk("ADC ISR system initialized. Awaiting TIM1 TRGO events...\n");
-
+    printk("INFO: DRV8334 Initialization Starting...\n");
     int ret = drv8334_init(&drv_cfg);
     if (ret < 0)
     {
@@ -287,7 +287,7 @@ int main(void)
     {
         printk("INFO: DRV8334 Initialized successfully\n");
     }
-
+    
     printk("INFO: System Testing Active. Ready to sample signals.\n");
 
     while (1)

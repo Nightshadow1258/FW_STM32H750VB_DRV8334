@@ -1,9 +1,9 @@
 #include "pwm_timer.h"
 
+static TIM_TypeDef *const tim1 = (TIM_TypeDef *)DT_REG_ADDR(TIM1_NODE);
+
 int start_center_aligned_3phase_pwm(void)
 {
-    TIM_TypeDef *tim1 = (TIM_TypeDef *)DT_REG_ADDR(TIM1_NODE);
-
     // 2. Stop counter and disable outputs for setup
     LL_TIM_DisableCounter(tim1);
     LL_TIM_DisableAllOutputs(tim1);
@@ -153,3 +153,67 @@ void print_tim1_clock_frequency(const struct shell *sh)
 }
 
 SHELL_CMD_REGISTER(tim1_clock_freq, NULL, "Print TIM1 clock frequency", print_tim1_clock_frequency);
+
+
+static int cmd_set_pwm_duty(const struct shell *sh, size_t argc, char **argv)
+{
+    if (argc < 4) {
+        shell_error(sh, "Usage: set_pwm <duty_a_pct> <duty_b_pct> <duty_c_pct>");
+        return -EINVAL;
+    }
+
+    uint32_t duty_a = strtoul(argv[1], NULL, 10);
+    uint32_t duty_b = strtoul(argv[2], NULL, 10);
+    uint32_t duty_c = strtoul(argv[3], NULL, 10);
+
+    /* Clamp duty cycle bounds between 0% and 90% */
+    if (duty_a > 90) duty_a = 90;
+    if (duty_b > 90) duty_b = 90;
+    if (duty_c > 90) duty_c = 90;
+
+    uint32_t arr = LL_TIM_GetAutoReload(tim1);
+
+    uint32_t compare_a = (duty_a * arr) / 100U;
+    uint32_t compare_b = (duty_b * arr) / 100U;
+    uint32_t compare_c = (duty_c * arr) / 100U;
+
+    LL_TIM_OC_SetCompareCH1(tim1, compare_a);
+    LL_TIM_OC_SetCompareCH2(tim1, compare_b);
+    LL_TIM_OC_SetCompareCH3(tim1, compare_c);
+
+    if (!LL_TIM_IsEnabledAllOutputs(tim1)) {
+        LL_TIM_EnableAllOutputs(tim1);
+    }
+
+    shell_print(sh, "PWM Duty set: A=%u%% (%u/%u), B=%u%% (%u/%u), C=%u%% (%u/%u)",
+                duty_a, compare_a, arr,
+                duty_b, compare_b, arr,
+                duty_c, compare_c, arr);
+
+    return 0;
+}
+
+/* Command to disable all PWM outputs */
+static int cmd_pwm_stop(const struct shell *sh, size_t argc, char **argv)
+{
+    ARG_UNUSED(argc);
+    ARG_UNUSED(argv);
+
+    LL_TIM_DisableAllOutputs(tim1);
+    
+    LL_TIM_OC_SetCompareCH1(tim1, 0);
+    LL_TIM_OC_SetCompareCH2(tim1, 0);
+    LL_TIM_OC_SetCompareCH3(tim1, 0);
+
+    shell_print(sh, "PWM Outputs Disabled (MOE cleared)");
+    return 0;
+}
+
+/* Register commands with Zephyr Shell */
+SHELL_CMD_ARG_REGISTER(set_pwm, NULL, 
+                       "Set Phase A, B, C duty cycles in %% (0 to 90)\nUsage: set_pwm <A> <B> <C>", 
+                       cmd_set_pwm_duty, 4, 0);
+
+SHELL_CMD_REGISTER(stop_pwm, NULL, 
+                   "Disable PWM outputs (Clear MOE)", 
+                   cmd_pwm_stop);

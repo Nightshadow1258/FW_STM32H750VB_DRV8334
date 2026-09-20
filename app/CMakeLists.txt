@@ -18,4 +18,5 @@ target_sources(app PRIVATE
     src/storage_manager.c
     src/adc_manager.c
     src/pwm_timer.c
+    src/foc_controller.c
 )

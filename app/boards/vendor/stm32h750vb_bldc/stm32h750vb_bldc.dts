@@ -27,6 +27,7 @@
 		zephyr,sram = &sram0;
 		zephyr,flash = &flash0;
 		zephyr,flash-controller = &w25q128jv;
+		//zephyr,code-partition = &slot0_partition; /* Primary application XIP target */
 	};
 
 	leds {
@@ -136,14 +137,6 @@
         nsleep-gpios = <&gpiob 14 GPIO_ACTIVE_HIGH>;
         drvoff-gpios = <&gpiob 15 GPIO_ACTIVE_HIGH>;
         nfault-gpios = <&gpioe 15 GPIO_ACTIVE_LOW>;
-
-        /* PWM Interface Pins -> configured via pinctrl Timer1 */
-        // inha-gpios = <&gpioe 8 GPIO_ACTIVE_HIGH>;
-        // inla-gpios = <&gpioe 9 GPIO_ACTIVE_HIGH>;
-        // inhb-gpios = <&gpioe 10 GPIO_ACTIVE_HIGH>;
-        // inlb-gpios = <&gpioe 11 GPIO_ACTIVE_HIGH>;
-        // inhc-gpios = <&gpioe 12 GPIO_ACTIVE_HIGH>;
-        // inlc-gpios = <&gpioe 13 GPIO_ACTIVE_HIGH>;
     };
 };
 
@@ -164,15 +157,20 @@
 	// };
 };
 
-//&sdmmc1 {
-	//    pinctrl-names = "default";
-	//    pinctrl-0 = <&sdmmc1_d0_pc8 &sdmmc1_d1_pc9
-	//             &sdmmc1_d2_pc10 &sdmmc1_d3_pc11
-	//             &sdmmc1_ck_pc12 &sdmmc1_cmd_pd2>;
-	//    cd-gpios = <&gpioa 8 GPIO_ACTIVE_LOW>;
-	//    disk-name = "SD";
-	//    status = "okay";
-//};
+&flash0 {
+        partitions {
+                compatible = "fixed-partitions";
+                #address-cells = <1>;
+                #size-cells = <1>;
+
+                /* MCUboot primary bootloader runs directly from 128KB internal flash */
+                boot_partition: partition@0 {
+                        label = "mcuboot";
+                        reg = <0x00000000 DT_SIZE_K(128)>;
+                };
+        };
+};
+
 
 &quadspi {
 	pinctrl-names = "default";
@@ -197,13 +195,27 @@
 			#address-cells = <1>;
 			#size-cells = <1>;
 
-			storage_partition: partition@0 {
-				label = "storage";
-				reg = <0x0 DT_SIZE_M(16)>;
-			};
+			/* Slot 0: Primary application XIP target (2 MB) */
+                        slot0_partition: partition@0 {
+                                label = "image-0";
+                                reg = <0x00000000 DT_SIZE_M(2)>;
+                        };
+
+                        /* Slot 1: Secondary application OTA staging slot (2 MB) */
+                        slot1_partition: partition@200000 {
+                                label = "image-1";
+                                reg = <0x00200000 DT_SIZE_M(2)>;
+                        };
+
+                        /* Storage partition for calibration data, parameters (2 MB) */
+                        storage_partition: partition@e00000 {
+                                label = "storage";
+                                reg = <0x00e00000 DT_SIZE_M(2)>;
+                        };
 		};
 	};
 };
+
 
 
 /* Define Analog Pin Control Configurations */

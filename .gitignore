@@ -1,2 +1,4 @@
 *build
 zephyr
+keys/
+*.pem

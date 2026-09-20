@@ -24,6 +24,7 @@
 #include "adc_manager.h"
 #include "drv8334.h"
 #include "pwm_timer.h"
+#include "foc_controller.h"
 
 LOG_MODULE_REGISTER(app, LOG_LEVEL_INF);
 
@@ -120,101 +121,117 @@ struct sensor_test_sample
 };
 
 /* Buffer configuration */
-#define MAX_SAMPLES 4096 // max ist around 8000
-static struct sensor_test_sample sample_buffer[MAX_SAMPLES];
+// #define MAX_SAMPLES 4096 // max ist around 8000
+// static struct sensor_test_sample sample_buffer[MAX_SAMPLES];
 
-void dump_characterization_data(void)
-{
-    // Wait for the measurement thread to be 100% idle
-    k_msleep(50);
+// void dump_characterization_data(void)
+// {
+//     // Wait for the measurement thread to be 100% idle
+//     k_msleep(50);
 
-    // Get the hardware clock frequency
-    uint32_t hw_freq = sys_clock_hw_cycles_per_sec();
+//     // Get the hardware clock frequency
+//     uint32_t hw_freq = sys_clock_hw_cycles_per_sec();
 
-    // Capture the first timestamp as the zero reference
-    uint32_t start_cycles = sample_buffer[0].timestamp;
+//     // Capture the first timestamp as the zero reference
+//     uint32_t start_cycles = sample_buffer[0].timestamp;
 
-    // Use a simpler header
-    printk("idx,ts [ms],Angle from ABI [°],Angle from SPI [°],Angle Linearization [°]\n");
+//     // Use a simpler header
+//     printk("idx,ts [ms],Angle from ABI [°],Angle from SPI [°],Angle Linearization [°]\n");
 
-    for (uint32_t i = 0; i < MAX_SAMPLES; i++)
-    {
-        // 1. Calculate relative cycles from the start
-        uint32_t rel_cycles = sample_buffer[i].timestamp - start_cycles;
+//     for (uint32_t i = 0; i < MAX_SAMPLES; i++)
+//     {
+//         // 1. Calculate relative cycles from the start
+//         uint32_t rel_cycles = sample_buffer[i].timestamp - start_cycles;
 
-        /* Calculate ms as float then round to nearest integer */
-        float rel_ms_float = (float)rel_cycles / (hw_freq / 1000.0f);
-        uint32_t rel_ms_int = (uint32_t)(rel_ms_float + 0.5f);
+//         /* Calculate ms as float then round to nearest integer */
+//         float rel_ms_float = (float)rel_cycles / (hw_freq / 1000.0f);
+//         uint32_t rel_ms_int = (uint32_t)(rel_ms_float + 0.5f);
 
-        float linear_corrected = apply_linear_correction(sample_buffer[i].abi_ticks);
+//         float linear_corrected = apply_linear_correction(sample_buffer[i].abi_ticks);
 
-        // Print and then wait for the UART to clear
-        printk("%u,%u,%.4f,%.4f,%.4f\n",
-               i,
-               rel_ms_int,
-               (double)sample_buffer[i].abi_ticks,
-               (double)sample_buffer[i].spi_raw * (360.0 / 16384.0),
-               (double)linear_corrected);
+//         // Print and then wait for the UART to clear
+//         printk("%u,%u,%.4f,%.4f,%.4f\n",
+//                i,
+//                rel_ms_int,
+//                (double)sample_buffer[i].abi_ticks,
+//                (double)sample_buffer[i].spi_raw * (360.0 / 16384.0),
+//                (double)linear_corrected);
 
-        // Slow down the dump significantly to ensure no data loss
-        // 3ms delay per line is safe for 115200 baud
-        k_msleep(3);
-    }
-}
+//         // Slow down the dump significantly to ensure no data loss
+//         // 3ms delay per line is safe for 115200 baud
+//         k_msleep(3);
+//     }
+// }
 
 /* Thread function */
-void measurement_thread_entry(void *p1, void *p2, void *p3)
-{
-    struct k_timer timer;
-    k_timer_init(&timer, NULL, NULL);
+// void measurement_thread_entry(void *p1, void *p2, void *p3)
+// {
+//     struct k_timer timer;
+//     k_timer_init(&timer, NULL, NULL);
 
+//     while (1)
+//     {
+//         /* Wait for PB3 trigger */
+//         k_sem_take(&meas_sem, K_FOREVER);
+
+//         /* Optional 100ms startup delay */
+//         // k_msleep(100);
+//         printk("Measurement triggered! Starting data capture...\n");
+//         uint32_t start_time = k_uptime_get_32();
+
+//         /* Start the interval timer for 50ms */
+//         k_timer_start(&timer, K_NO_WAIT, K_MSEC(2.5)); // 2.5ms interval for 400Hz sampling
+
+//         /* Collect exactly MAX_SAMPLES */
+//         for (int i = 0; i < MAX_SAMPLES; i++)
+//         {
+//             k_timer_status_sync(&timer);
+//             /* 1. Fetch ABI Ticks */
+//             struct sensor_value qdec_value = {0};
+//             double precise_degrees = 0.0;
+//             if (sensor_sample_fetch(qdec_dev) == 0)
+//             {
+//                 sensor_channel_get(qdec_dev, SENSOR_CHAN_ROTATION, &qdec_value);
+
+//                 // Convert to double to see the 0.08789 degree increments
+//                 precise_degrees = sensor_value_to_double(&qdec_value);
+//             }
+
+//             /* 2. Fetch SPI Raw Angle */
+//             uint16_t raw_reg = as5047p_read_reg(dev_mag_as5047p, &spi_cfg, &cs_gpio, AS5047P_REG_ANGLECOM);
+//             /* 3. Store to RAM using the loop index 'i' */
+//             sample_buffer[i].timestamp = k_cycle_get_32();
+//             sample_buffer[i].abi_ticks = precise_degrees;
+//             sample_buffer[i].spi_raw = raw_reg & 0x3FFF;
+//             /* Wait for the remainder of the 10ms interval */
+//         }
+//         k_timer_stop(&timer);
+
+//         uint32_t end_time = k_uptime_get_32();
+//         printk("Capture End. Duration: %u ms\n", (end_time - start_time));
+//         printk("Data capture complete! Dumping data...\n");
+//         dump_characterization_data();
+//         k_sem_reset(&meas_sem);
+//         /* Thread automatically loops back to k_sem_take and sleeps */
+//     }
+// }
+// K_THREAD_DEFINE(meas_thread_id, 2048, measurement_thread_entry, NULL, NULL, NULL, 2, 0, 0);
+
+// Thread for open-loop FOC control
+void open_loop_thread_entry(void *p1, void *p2, void *p3)
+{
     while (1)
     {
-        /* Wait for PB3 trigger */
-        k_sem_take(&meas_sem, K_FOREVER);
-
-        /* Optional 100ms startup delay */
-        // k_msleep(100);
-        printk("Measurement triggered! Starting data capture...\n");
-        uint32_t start_time = k_uptime_get_32();
-
-        /* Start the interval timer for 50ms */
-        k_timer_start(&timer, K_NO_WAIT, K_MSEC(2.5)); // 2.5ms interval for 400Hz sampling
-
-        /* Collect exactly MAX_SAMPLES */
-        for (int i = 0; i < MAX_SAMPLES; i++)
+        const struct open_loop_config *cfg = foc_get_open_loop_config();
+        if (cfg != NULL && cfg->enabled)
         {
-            k_timer_status_sync(&timer);
-            /* 1. Fetch ABI Ticks */
-            struct sensor_value qdec_value = {0};
-            double precise_degrees = 0.0;
-            if (sensor_sample_fetch(qdec_dev) == 0)
-            {
-                sensor_channel_get(qdec_dev, SENSOR_CHAN_ROTATION, &qdec_value);
-
-                // Convert to double to see the 0.08789 degree increments
-                precise_degrees = sensor_value_to_double(&qdec_value);
-            }
-
-            /* 2. Fetch SPI Raw Angle */
-            uint16_t raw_reg = as5047p_read_reg(dev_mag_as5047p, &spi_cfg, &cs_gpio, AS5047P_REG_ANGLECOM);
-            /* 3. Store to RAM using the loop index 'i' */
-            sample_buffer[i].timestamp = k_cycle_get_32();
-            sample_buffer[i].abi_ticks = precise_degrees;
-            sample_buffer[i].spi_raw = raw_reg & 0x3FFF;
-            /* Wait for the remainder of the 10ms interval */
+            foc_open_loop_update(0.001f);
         }
-        k_timer_stop(&timer);
-
-        uint32_t end_time = k_uptime_get_32();
-        printk("Capture End. Duration: %u ms\n", (end_time - start_time));
-        printk("Data capture complete! Dumping data...\n");
-        dump_characterization_data();
-        k_sem_reset(&meas_sem);
-        /* Thread automatically loops back to k_sem_take and sleeps */
+        k_msleep(1);
     }
 }
-K_THREAD_DEFINE(meas_thread_id, 2048, measurement_thread_entry, NULL, NULL, NULL, 2, 0, 0);
+
+K_THREAD_DEFINE(open_loop_tid, 2048, open_loop_thread_entry, NULL, NULL, NULL, 5, 0, 0);
 
 // flash
 #include <zephyr/drivers/flash.h>
@@ -223,6 +240,7 @@ K_THREAD_DEFINE(meas_thread_id, 2048, measurement_thread_entry, NULL, NULL, NULL
 
 int main(void)
 {
+    printk("Tick frequency: %d Hz\n", CONFIG_SYS_CLOCK_TICKS_PER_SEC);
     if (!gpio_is_ready_dt(&cs_gpio))
     {
         LOG_ERR("CS GPIO device not ready");
@@ -269,7 +287,7 @@ int main(void)
 
     storage_run_test();
 
-    start_center_aligned_3phase_pwm();
+    pwm_timer_start_3phase_center_aligned();
     printk("INFO: Timer 1 center aligned 3 phase pwm started.\n");
 
     printk("INFO: Starting ADC DMA triggered by TIM1 TRGO.\n");
@@ -287,7 +305,7 @@ int main(void)
     {
         printk("INFO: DRV8334 Initialized successfully\n");
     }
-    
+
     printk("INFO: System Testing Active. Ready to sample signals.\n");
 
     while (1)

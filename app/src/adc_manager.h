@@ -31,6 +31,10 @@
 extern "C" {
 #endif
 
+
+extern volatile struct motor_currents_sample g_latest_currents;
+
+
 /**
  * @brief Structure holding the latest raw and converted millivolt data.
  * Ready for extraction by control feedback or background loops.
@@ -47,7 +51,6 @@ struct motor_currents_sample {
     float i_c;
 };
 
-extern volatile struct motor_currents_sample g_latest_currents;
 
 int start_timer_triggered_adc_dma(void);
 int calibrate_current_offsets(void);

@@ -18,16 +18,17 @@
 		spi-flash0 = &w25q128jv;
 		storage-flash = &storage_partition;
 		meas-trigger = &meas_trigger;
-
 	};
 
 	chosen {
 		zephyr,console = &usart1;
 		zephyr,shell-uart = &usart1;
 		zephyr,sram = &sram0;
-		zephyr,flash = &flash0;
-		zephyr,flash-controller = &w25q128jv;
-		//zephyr,code-partition = &slot0_partition; /* Primary application XIP target */
+		//zephyr,flash = &flash0;
+		zephyr,flash = &w25q128jv;
+		//zephyr,flash-controller = &w25q128jv;
+		zephyr,flash-controller = &quadspi;
+		zephyr,code-partition = &slot0_partition; /* Primary application XIP target */
 	};
 
 	leds {
@@ -182,12 +183,13 @@
 	w25q128jv: qspi-nor-flash@0 {
 		compatible = "st,stm32-qspi-nor";
 		reg = <0>;
-		size = <DT_SIZE_M(128)>; /* 128 Mbits */
+		size = <DT_SIZE_M(128)>; /* 128 Mbits  */
 		qspi-max-frequency = <80000000>;
 		cs-high-time = <4>; /* >= 50 ns */
 		spi-bus-width = <4>;
 		jedec-id = [ ef 40 18  ];
 		status = "okay";
+
 		/* Tell Zephyr to program the QE bit in Status Register 2 -> enables QSPI else only Singe Wire works*/
 		quad-enable-requirements = "S2B1v1";
 		partitions {
@@ -198,19 +200,19 @@
 			/* Slot 0: Primary application XIP target (2 MB) */
                         slot0_partition: partition@0 {
                                 label = "image-0";
-                                reg = <0x00000000 DT_SIZE_M(2)>;
+                                reg = <0x00000000 0x00200000>;
                         };
 
                         /* Slot 1: Secondary application OTA staging slot (2 MB) */
                         slot1_partition: partition@200000 {
                                 label = "image-1";
-                                reg = <0x00200000 DT_SIZE_M(2)>;
+                                reg = <0x00200000 0x00200000>;
                         };
 
                         /* Storage partition for calibration data, parameters (2 MB) */
                         storage_partition: partition@e00000 {
                                 label = "storage";
-                                reg = <0x00e00000 DT_SIZE_M(2)>;
+                                reg = <0x00e00000 0x00200000>;
                         };
 		};
 	};

@@ -120,7 +120,7 @@ static int cmd_pwm_set(const struct shell *sh, size_t argc, char **argv)
     if (duty_c > PWM_TIMER_MAX_DUTY_PCT) duty_c = PWM_TIMER_MAX_DUTY_PCT;
 
     uint32_t arr = LL_TIM_GetAutoReload(tim1_instance);
-
+    
     uint32_t compare_a = (duty_a * arr) / 100U;
     uint32_t compare_b = (duty_b * arr) / 100U;
     uint32_t compare_c = (duty_c * arr) / 100U;

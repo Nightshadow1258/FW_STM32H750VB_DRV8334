@@ -11,7 +11,7 @@
 #endif
 
 #define TWO_PI (2.0f * M_PI)
-#define OPEN_LOOP_MAX_AMP_PCT 30.0f  /* Hard safety clamp for open-loop drive */
+#define OPEN_LOOP_MAX_AMP_PCT 70.0f  /* Hard safety clamp for open-loop drive */
 
 static struct open_loop_config g_open_loop = {
     .enabled = false,

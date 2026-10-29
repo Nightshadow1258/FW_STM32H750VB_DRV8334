@@ -25,9 +25,11 @@
 		zephyr,console = &usart1;
 		zephyr,shell-uart = &usart1;
 		zephyr,sram = &sram0;
-		zephyr,flash = &flash0;
-		zephyr,flash-controller = &w25q128jv;
-		//zephyr,code-partition = &slot0_partition; /* Primary application XIP target */
+		//zephyr,flash = &flash0;
+		zephyr,flash = &w25q128jv;
+		//zephyr,flash-controller = &w25q128jv; // test this as well
+		zephyr,flash-controller = &quadspi;
+		zephyr,code-partition = &slot0_partition; /* Primary application XIP target */
 	};
 
 	leds {
